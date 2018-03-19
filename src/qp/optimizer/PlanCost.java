@@ -110,9 +110,14 @@ public class PlanCost{
 	int righttuplesize= rightschema.getTupleSize();
 	int rightcapacity = Batch.getPageSize()/righttuplesize;
 
+	int leftBlockCapacity = Block.getBlockSize() / leftcapacity;
+	//int rightBlockCapacity = Block.getBlockSize() / rightcapacity;
+
 	int leftpages=(int) Math.ceil(((double)lefttuples)/(double)leftcapacity);
 	int rightpages=(int) Math.ceil(((double)righttuples)/(double) rightcapacity);
 
+	int leftblocks = (int) Math.ceil (((double)leftpages)/(double)leftBlockCapacity);
+	//int rightblocks = (int) Math.ceil (((double)rightpages)/(double)rightBlockCapacity);
 
 	Attribute leftjoinAttr = con.getLhs();
 	Attribute rightjoinAttr = (Attribute)con.getRhs();
@@ -146,7 +151,7 @@ public class PlanCost{
 	    joincost = leftpages*rightpages;
 	    break;
 	case JoinType.BLOCKNESTED:
-	    joincost = 0;
+	    joincost = leftpages+(leftblocks)*rightpages;
 	    break;
 	case JoinType.SORTMERGE:
 	    joincost = 0;
