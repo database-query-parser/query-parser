@@ -35,18 +35,6 @@ public class QueryMain{
 		e.printStackTrace();
 	 }
 
-		/** Enter the number of blocks per page **/
-
-		System.out.println("enter the number of pages per block");
-		in = new BufferedReader(new InputStreamReader(System.in));
-		try {
-			temp = in.readLine();
-			int blocksize = Integer.parseInt(temp);
-			Block.setBlockSize(blocksize);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
 
 
 
