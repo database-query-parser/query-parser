@@ -1,5 +1,11 @@
 .idea/
 out/
-query8out
-query5out
+lib/
+testcases/
+query1out
 query2out
+query3out
+query5out
+query6out
+query7out
+query8out
