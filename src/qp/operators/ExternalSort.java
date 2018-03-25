@@ -73,17 +73,21 @@ public class ExternalSort extends Operator {
             return readBatch(in);
         } catch (IOException ioe) {
             System.out.println("ExternalSort: next() error");
+        } catch (ArrayIndexOutOfBoundsException aioofe) { // no join result
+            return null;
         }
         return null;
     }
 
     public boolean close() {
-        clearTempFiles(sortedRunFiles);
         try {
             in.close();
         } catch (IOException io) {
             System.out.println("ExternalSort: close() error");
+        } catch (NullPointerException npe) {
+            System.out.println("ExternalSort: no join result");
         }
+        clearTempFiles(sortedRunFiles);
         return super.close();
     }
 
@@ -239,6 +243,10 @@ public class ExternalSort extends Operator {
             }
         }
 
+        for (ObjectInputStream ois : inputStreams) {
+            closeInputStream(ois);
+        }
+
         return output;
     }
 
@@ -279,6 +287,7 @@ public class ExternalSort extends Operator {
         } catch (EOFException e) {
             return null;
         } catch (IOException e) {
+            e.printStackTrace();
             System.out.println("ExternalSort: readBatch IOException");
         } catch (ClassNotFoundException e) {
             System.out.println("ExternalSort: readBatch ClassNotFoundException");
@@ -313,4 +322,11 @@ public class ExternalSort extends Operator {
         }
     }
 
+    private void closeInputStream(ObjectInputStream ois) {
+        try {
+            ois.close();
+        } catch (IOException io) {
+            System.out.println("ES: IOException error closing input stream");
+        }
+    }
 }

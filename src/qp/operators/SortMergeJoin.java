@@ -4,7 +4,6 @@
 
 package qp.operators;
 
-import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -37,13 +36,18 @@ public class SortMergeJoin extends Join {
     private Batch outbatch;   // Output buffer
     private Batch leftbatch;  // Buffer for left input stream
     private Batch rightbatch;  // Buffer for right input stream
+    private Vector<Batch> leftbatches;
 
-    private ObjectInputStream in; // File pointer to the right hand materialized file
+    private ObjectInputStream in;
+
+    private int k = 0;
 
     private int lcurs;    // Cursor for left side buffer
     private int rcurs;    // Cursor for right side buffer
-    private int lbcurs;   // Cursor for group of left side buffers
-    private int maxlbcurs; // Total size of group of left side buffers
+    private int leftBatchIndex;
+    private int rightBatchIndex;
+    private int leftBlockIndex;
+    private int maxLeftBlocks; // Total size of group of left side buffers
 
     private boolean eosl;  // Whether end of stream (left table) is reached
     private boolean eosr;  // End of stream (right table)
@@ -62,6 +66,7 @@ public class SortMergeJoin extends Join {
 
     private boolean hasMatch;
     private int rightFirstMatchIndex;
+    private int rightFirstMatchBatchIndex;
 
     public SortMergeJoin(Join jn) {
         super(jn.getLeft(), jn.getRight(), jn.getCondition(), jn.getOpType());
@@ -110,6 +115,7 @@ public class SortMergeJoin extends Join {
 
         hasMatch = false;
         rightFirstMatchIndex = 0;
+        rightFirstMatchBatchIndex = 0;
 
         leftBufferSize = numBuff - 2; // 1 buffer for right, 1 for output, remaining for left
         // right will probe left
@@ -118,11 +124,22 @@ public class SortMergeJoin extends Join {
 
         lcurs = 0;
         rcurs = 0;
-        lbcurs = 0;
-        maxlbcurs = (int) Math.ceil(sortedLeftFiles.size() / leftBufferSize);
+        leftBatchIndex = 0;
+        leftBlockIndex = 0;
+        rightBatchIndex = 0;
+        maxLeftBlocks = (int) Math.ceil(sortedLeftFiles.size() / (double) leftBufferSize);
+        System.out.println(maxLeftBlocks);
         eosl = false;
         eosr = true;
         eoslb = false;
+
+        try {
+            leftbatches = getNextLeftBuffers();
+            leftbatch = leftbatches.get(0);
+            rightbatch = getRightBuffer();
+        } catch (NullPointerException npe) {
+            System.out.println("SMJ: Cannot perform join");
+        }
 
         return true;
     }
@@ -138,110 +155,81 @@ public class SortMergeJoin extends Join {
         //System.out.print("NestedJoin:--------------------------in next----------------");
         //Debug.PPrint(con);
         //System.out.println();
-        int i, j;
-        if (eosl) {
+        if (leftBlockIndex == maxLeftBlocks || leftbatch == null || rightbatch == null) {
             close();
             return null;
         }
         outbatch = new Batch(batchsize);
 
+        System.out.println(leftBlockIndex + " " + maxLeftBlocks + " " + leftBatchIndex + " " + rightBatchIndex);
+
         while (!outbatch.isFull()) {
 
-            if (lcurs == 0 && eosr == true) {
-                /** new left page is to be fetched**/
-                leftbatch = (Batch) left.next();
-                if (leftbatch == null) {
-                    eosl = true;
-                    return outbatch;
+            if (lcurs == leftbatch.size()) {
+                leftBatchIndex++;
+                if (leftBatchIndex < leftbatches.size()) {
+                    leftbatch = leftbatches.get(leftBatchIndex);
+                } else {
+                    leftBatchIndex = 0;
+                    leftBlockIndex++;
+                    leftbatches = getNextLeftBuffers();
+                    if (leftbatches == null) {
+                        close();
+                        return outbatch.isEmpty() ? null : outbatch;
+                    } else {
+                        leftbatch = leftbatches.get(leftBatchIndex);
+                    }
                 }
-                /** Whenver a new left page came , we have to start the
-                 ** scanning of right table
-                 **/
-                try {
-
-                    in = new ObjectInputStream(new FileInputStream(rfname));
-                    eosr = false;
-                } catch (IOException io) {
-                    System.err.println("NestedJoin:error in reading the file");
-                    System.exit(1);
-                }
-
+                lcurs = 0;
             }
 
-            while (eosr == false) {
+            if (rcurs == rightbatch.size()) {
+                rightBatchIndex++;
+                rightbatch = getRightBuffer();
+                if (rightbatch == null) {
+                    close();
+                    return outbatch.isEmpty() ? null : outbatch;
+                }
+                rcurs = 0;
+            }
 
-                try {
-                    if (rcurs == 0 && lcurs == 0) {
-                        rightbatch = (Batch) in.readObject();
+            while (lcurs < leftbatch.size() && rcurs < rightbatch.size()) {
+                System.out.print(lcurs + " " + rcurs);
+                Tuple leftTuple = leftbatch.elementAt(lcurs);
+                Tuple rightTuple = rightbatch.elementAt(rcurs);
+                int comparison = Tuple.compareTuples(leftTuple, rightTuple, leftindex, rightindex);
+                if (comparison < 0) {  // left tuple < right tuple
+                    System.out.println(" smaller");
+                    lcurs++;  // move to next left tuple
+                    if (hasMatch) {
+                        rightFirstMatchIndex = rcurs;
+                        rightFirstMatchBatchIndex = rightBatchIndex;
                     }
-
-                    i = lcurs;
-                    j = rcurs;
-
-                    while (i < leftbatch.size() && j < rightbatch.size()) {
-                        Tuple lefttuple = leftbatch.elementAt(i);
-                        Tuple righttuple = rightbatch.elementAt(j);
-                        int condition = Tuple.compareTuples(lefttuple, righttuple, leftindex, rightindex);
-                        if (condition == 0) {
-                            Tuple outtuple = lefttuple.joinWith(righttuple);
-
-                            //Debug.PPrint(outtuple);
-                            //System.out.println();
-                            outbatch.add(outtuple);
-                            if (outbatch.isFull()) {
-                                if (i == leftbatch.size() - 1 && j == rightbatch.size() - 1) {//case 1
-                                    lcurs = 0;
-                                    rcurs = 0;
-                                } else if (i != leftbatch.size() - 1 && j == rightbatch.size() - 1) {//case 2
-                                    lcurs = i + 1;
-                                    rcurs = 0;
-                                } else if (i == leftbatch.size() - 1 && j != rightbatch.size() - 1) {//case 3
-                                    lcurs = i;
-                                    rcurs = j + 1;
-                                } else {
-                                    lcurs = i;
-                                    rcurs = j + 1;
-                                }
-                                return outbatch;
-                            }
-
-                            if (!hasMatch) {
-                                rightFirstMatchIndex = j;
-                                hasMatch = true;
-                            }
-                            j++;
-                        } else if (condition < 0) { // left is smaller
-                            i++;
-                            if (hasMatch) {
-                                j = rightFirstMatchIndex;
-                            }
-                            hasMatch = false;
-                        } else { // left is bigger
-                            j++;
-                            hasMatch = false;
+                    hasMatch = false;
+                } else if (comparison > 0) {  // left tuple > right tuple
+                    System.out.println(" bigger");
+                    rcurs++;  // move to next right tuple
+                    hasMatch = false;
+                } else { // match
+                    System.out.println(" match");
+                    if (!hasMatch) {
+                        rcurs = rightFirstMatchIndex;
+                        if (rightBatchIndex > rightFirstMatchBatchIndex) {
+                            rightBatchIndex = rightFirstMatchBatchIndex;
+                            rightbatch = getRightBuffer(rightFirstMatchBatchIndex);
                         }
-
-                        if (j < rightbatch.size())
-                            rcurs = 0;
+                        hasMatch = true;
                     }
-                    lcurs = 0;
-                } catch (EOFException e) {
-                    try {
-                        in.close();
-                    } catch (IOException io) {
-                        System.out.println("NestedJoin:Error in temporary file reading");
-                    }
-                    eosr = true;
-                } catch (ClassNotFoundException c) {
-                    System.out.println("NestedJoin:Some error in deserialization ");
-                    System.exit(1);
-                } catch (IOException io) {
-                    System.out.println("NestedJoin:temporary file reading error");
-                    System.exit(1);
+                    Tuple joinTuple = leftTuple.joinWith(rightTuple);
+                    outbatch.add(joinTuple);
+                    rcurs++;
+                }
+                if (outbatch.isFull()) {
+                    return outbatch;
                 }
             }
         }
-        return outbatch;
+        return outbatch.isEmpty() ? null : outbatch;
     }
 
 
@@ -257,20 +245,26 @@ public class SortMergeJoin extends Join {
 
     }
 
-    /*
-    private Vector<Batch> readLeftInput(int start, int end, List<File> fileList) {
-        Vector<Batch> batchList = new Vector<>();
-        if (end > fileList.size()) {
-            end = fileList.size();
+
+    private Vector<Batch> getNextLeftBuffers() {
+        if (leftBlockIndex == maxLeftBlocks) {
+            return null;
         }
 
+        int start = leftBlockIndex * leftBufferSize;
+        int end = (leftBlockIndex + 1) * leftBufferSize;
+        if (end > sortedLeftFiles.size()) {
+            end = sortedLeftFiles.size();
+        }
+
+        Vector<Batch> batchList = new Vector<>();
         for (int i = start; i < end; i++) {
-            File file = fileList.get(i);
+            File file = sortedLeftFiles.get(i);
             Batch batch;
             try {
-                leftInput = new ObjectInputStream(new FileInputStream(file));
-                batch = (Batch) leftInput.readObject();
-                leftInput.close();
+                in = new ObjectInputStream(new FileInputStream(file));
+                batch = (Batch) in.readObject();
+                in.close();
                 batchList.add(batch);
             } catch (IOException io) {
                 System.out.println("SortMergeJoin: IOException in reading sortedLeftFiles");
@@ -278,17 +272,20 @@ public class SortMergeJoin extends Join {
                 System.out.println("SortMergeJoin: ClassNotFoundException in deserialization");
             }
         }
-
         return batchList;
     }
 
-    private Batch readRightInput(int index, List<File> fileList) {
+
+    private Batch getRightBuffer() {
+        if (rightBatchIndex == sortedRightFiles.size()) {
+            return null;
+        }
         Batch batch = null;
-        File file = fileList.get(index);
+        File file = sortedRightFiles.get(rightBatchIndex);
         try {
-            rightInput = new ObjectInputStream(new FileInputStream(file));
-            batch = (Batch) rightInput.readObject();
-            rightInput.close();
+            in = new ObjectInputStream(new FileInputStream(file));
+            batch = (Batch) in.readObject();
+            in.close();
         } catch (IOException ioe) {
             System.out.println("SortMergeJoin: IOException in reading sortedRightFiles at next()");
         } catch (ClassNotFoundException cnfe) {
@@ -296,7 +293,24 @@ public class SortMergeJoin extends Join {
         }
         return batch;
     }
-*/
+
+    private Batch getRightBuffer(int index) {
+        Batch batch = null;
+        File file = sortedRightFiles.get(index);
+        try {
+            in = new ObjectInputStream(new FileInputStream(file));
+            batch = (Batch) in.readObject();
+            in.close();
+        } catch (IOException ioe) {
+            System.out.println("SortMergeJoin: IOException in reading sortedRightFiles at next()");
+        } catch (ClassNotFoundException cnfe) {
+            System.out.println("SortMergeJoin: ClassNotFoundException in deserialization");
+        }
+        rightBatchIndex++;
+        return batch;
+    }
+
+
 
     private List<File> writeSortedFiles(Operator op, String filePrefix) throws IOException {
         Batch batch;
