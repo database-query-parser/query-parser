@@ -49,10 +49,6 @@ public class SortMergeJoin extends Join {
     private int leftBlockIndex;
     private int maxLeftBlocks; // Total size of group of left side buffers
 
-    private boolean eosl;  // Whether end of stream (left table) is reached
-    private boolean eosr;  // End of stream (right table)
-    private boolean eoslb; // End of stream (end of group of left buffers) is reached
-
     private int leftBufferSize;
 
     private ExternalSort leftSort;
@@ -95,22 +91,34 @@ public class SortMergeJoin extends Join {
         rightindex = right.getSchema().indexOf(rightattr);
 
         // Sorts both left and right relations
-        leftSort = new ExternalSort(left, leftindex, numBuff);
-        rightSort = new ExternalSort(right, rightindex, numBuff);
+        leftSort = new ExternalSort(left, leftattr, numBuff);
 
-        if (!(leftSort.open() && rightSort.open())) {
+        if (!(leftSort.open())) {
             return false;
         }
 
         try {
             sortedLeftFiles = writeSortedFiles(leftSort, SORTED_LEFT_FILE_NAME);
-            sortedRightFiles = writeSortedFiles(rightSort, SORTED_RIGHT_FILE_NAME);
         } catch (IOException io) {
             System.out.println("SortMergeJoin: Error in writing sorted files");
             return false;
         }
 
         leftSort.close();
+
+        rightSort = new ExternalSort(right, rightattr, numBuff);
+
+        if (!(rightSort.open())) {
+            return false;
+        }
+
+        try {
+            sortedRightFiles = writeSortedFiles(rightSort, SORTED_RIGHT_FILE_NAME);
+        } catch (IOException io) {
+            System.out.println("SortMergeJoin: Error in writing sorted files");
+            return false;
+        }
+
         rightSort.close();
 
         hasMatch = false;
@@ -128,10 +136,6 @@ public class SortMergeJoin extends Join {
         leftBlockIndex = 0;
         rightBatchIndex = 0;
         maxLeftBlocks = (int) Math.ceil(sortedLeftFiles.size() / (double) leftBufferSize);
-        System.out.println(maxLeftBlocks);
-        eosl = false;
-        eosr = true;
-        eoslb = false;
 
         try {
             leftbatches = getNextLeftBuffers();
@@ -160,8 +164,6 @@ public class SortMergeJoin extends Join {
             return null;
         }
         outbatch = new Batch(batchsize);
-
-        System.out.println(leftBlockIndex + " " + maxLeftBlocks + " " + leftBatchIndex + " " + rightBatchIndex);
 
         while (!outbatch.isFull()) {
 
@@ -194,12 +196,10 @@ public class SortMergeJoin extends Join {
             }
 
             while (lcurs < leftbatch.size() && rcurs < rightbatch.size()) {
-                System.out.print(lcurs + " " + rcurs);
                 Tuple leftTuple = leftbatch.elementAt(lcurs);
                 Tuple rightTuple = rightbatch.elementAt(rcurs);
                 int comparison = Tuple.compareTuples(leftTuple, rightTuple, leftindex, rightindex);
                 if (comparison < 0) {  // left tuple < right tuple
-                    System.out.println(" smaller");
                     lcurs++;  // move to next left tuple
                     if (hasMatch) {
                         rightFirstMatchIndex = rcurs;
@@ -207,11 +207,9 @@ public class SortMergeJoin extends Join {
                     }
                     hasMatch = false;
                 } else if (comparison > 0) {  // left tuple > right tuple
-                    System.out.println(" bigger");
                     rcurs++;  // move to next right tuple
                     hasMatch = false;
                 } else { // match
-                    System.out.println(" match");
                     if (!hasMatch) {
                         rcurs = rightFirstMatchIndex;
                         if (rightBatchIndex > rightFirstMatchBatchIndex) {

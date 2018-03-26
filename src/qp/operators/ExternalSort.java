@@ -12,7 +12,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Vector;
 
+import qp.utils.Attribute;
 import qp.utils.Batch;
+import qp.utils.Schema;
 import qp.utils.Tuple;
 
 public class ExternalSort extends Operator {
@@ -21,7 +23,6 @@ public class ExternalSort extends Operator {
     private final String FILE_HEADER = "EStemp-";
 
     private Operator table;
-    private int index; // index to compare
     private int numBuff;
 
     private int batchSize; // maximum number of tuples per batch
@@ -29,18 +30,20 @@ public class ExternalSort extends Operator {
     private int passNum;
     private int runNum;
 
+    private Attribute joinAttribute;
+
     private Vector<File> sortedRunFiles;
 
     private ObjectInputStream in;
 
     private Comparator<Tuple> comparator;
 
-    public ExternalSort(Operator table, int index, int numBuff) {
+    public ExternalSort(Operator table, Attribute joinAttribute, int numBuff) {
         super(OpType.SORT);
         this.table = table;
-        this.index = index;
         this.numBuff = numBuff;
         this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
+        this.joinAttribute = joinAttribute;
         fileNum++;
     }
 
@@ -305,19 +308,20 @@ public class ExternalSort extends Operator {
     }
 
     private Comparator<Tuple> generateComparator() {
-        return new SortComparator(index);
+        return new SortComparator(table.getSchema());
     }
 
     class SortComparator implements Comparator<Tuple> {
 
-        private int joinIndex;
+        private Schema schema;
 
-        SortComparator(int index) {
-            this.joinIndex = index;
+        SortComparator(Schema schema) {
+            this.schema = schema;
         }
 
         @Override
         public int compare(Tuple t1, Tuple t2) {
+            int joinIndex = schema.indexOf(joinAttribute);
             return Tuple.compareTuples(t1, t2, joinIndex);
         }
     }
