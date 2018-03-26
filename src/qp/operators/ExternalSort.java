@@ -20,7 +20,7 @@ import qp.utils.Tuple;
 
 public class ExternalSort extends Operator {
 
-    private static int fileNum = 0;
+    private static int instanceNum = 0;
     private final String FILE_HEADER = "EStemp-";
 
     private Operator table;
@@ -28,6 +28,7 @@ public class ExternalSort extends Operator {
 
     private int batchSize; // maximum number of tuples per batch
 
+    private int fileNum;
     private int passNum;
     private int runNum;
 
@@ -45,7 +46,7 @@ public class ExternalSort extends Operator {
         this.numBuff = numBuff;
         this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
         this.joinAttribute = joinAttribute;
-        fileNum++;
+        this.fileNum = instanceNum++;
     }
 
     public boolean open() {

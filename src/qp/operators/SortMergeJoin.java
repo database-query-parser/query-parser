@@ -92,33 +92,21 @@ public class SortMergeJoin extends Join {
 
         // Sorts both left and right relations
         leftSort = new ExternalSort(left, leftattr, numBuff);
+        rightSort = new ExternalSort(right, rightattr, numBuff);
 
-        if (!(leftSort.open())) {
+        if (!(leftSort.open() && (rightSort.open()))) {
             return false;
         }
 
         try {
             sortedLeftFiles = writeSortedFiles(leftSort, SORTED_LEFT_FILE_NAME);
-        } catch (IOException io) {
-            System.out.println("SortMergeJoin: Error in writing sorted files");
-            return false;
-        }
-
-        leftSort.close();
-
-        rightSort = new ExternalSort(right, rightattr, numBuff);
-
-        if (!(rightSort.open())) {
-            return false;
-        }
-
-        try {
             sortedRightFiles = writeSortedFiles(rightSort, SORTED_RIGHT_FILE_NAME);
         } catch (IOException io) {
             System.out.println("SortMergeJoin: Error in writing sorted files");
             return false;
         }
 
+        leftSort.close();
         rightSort.close();
 
         hasMatch = false;
@@ -139,6 +127,9 @@ public class SortMergeJoin extends Join {
 
         try {
             leftbatches = getNextLeftBuffers();
+            if (leftbatches == null) {
+                return false;
+            }
             leftbatch = leftbatches.get(0);
             rightbatch = getRightBuffer();
         } catch (NullPointerException npe) {
@@ -268,6 +259,7 @@ public class SortMergeJoin extends Join {
                 batchList.add(batch);
             } catch (IOException io) {
                 System.out.println("SortMergeJoin: IOException in reading sortedLeftFiles");
+                return null;
             } catch (ClassNotFoundException cnfe) {
                 System.out.println("SortMergeJoin: ClassNotFoundException in deserialization");
             }
