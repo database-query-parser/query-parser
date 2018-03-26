@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Vector;
 
+import qp.utils.AppendingObjectOutputStream;
 import qp.utils.Attribute;
 import qp.utils.Batch;
 import qp.utils.Schema;
@@ -275,7 +276,7 @@ public class ExternalSort extends Operator {
 
     private void appendRun(Batch run, File dest) {
         try {
-            ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(dest, true));
+            ObjectOutputStream out = new AppendingObjectOutputStream(new FileOutputStream(dest, true));
             out.writeObject(run);
             out.close();
         } catch (IOException e) {

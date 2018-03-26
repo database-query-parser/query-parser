@@ -143,6 +143,8 @@ public class SortMergeJoin extends Join {
             rightbatch = getRightBuffer();
         } catch (NullPointerException npe) {
             System.out.println("SMJ: Cannot perform join");
+        } catch (ArrayIndexOutOfBoundsException aiooe) {
+            return false;
         }
 
         return true;
