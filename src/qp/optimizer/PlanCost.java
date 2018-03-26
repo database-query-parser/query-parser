@@ -149,7 +149,7 @@ public class PlanCost{
 	    joincost = 0;
 	    break;
 	case JoinType.SORTMERGE:
-	    joincost = 0;
+	    joincost = sortMergeJoinCost(leftpages, rightpages, numbuff);
 	    break;
 	case JoinType.HASHJOIN:
 	    joincost = 0;
@@ -218,6 +218,18 @@ public class PlanCost{
 	//System.out.println("PlanCost: line 164: outtuples="+outtuples);
 	return outtuples;
     }
+
+    private int sortMergeJoinCost(int leftPages, int rightPages, int numBuff) {
+    	int leftSortCost = externalSortCost(leftPages, numBuff);
+    	int rightSortCost = externalSortCost(rightPages, numBuff);
+    	return leftSortCost + rightSortCost + leftPages + rightPages;
+	}
+
+	private int externalSortCost(int numPages, int numBuff) {
+		return 2 * numPages * (1 + (int) Math.ceil(
+				Math.log(Math.ceil(numPages / ((double) numBuff))) / Math.log(numPages - 1))
+		);
+	}
 
 
 
