@@ -82,8 +82,17 @@ public class BlockNestedJoin extends Join{
          **/
         Batch rightpage;
 
-        if(!right.open()){
+        if (materializeRightTable()) return false;
+        if(left.open())
+            return true;
+        else
             return false;
+    }
+
+    private boolean materializeRightTable() {
+        Batch rightpage;
+        if(!right.open()){
+            return true;
         }else{
             /** If the right operator is not a base table then
              ** Materialize the intermediate result from right
@@ -102,18 +111,14 @@ public class BlockNestedJoin extends Join{
                 out.close();
             }catch(IOException io){
                 System.out.println("BlockNestedJoin:writing the temporary file error");
-                return false;
+                return true;
             }
             //}
             if(!right.close())
-                return false;
+                return true;
         }
-        if(left.open())
-            return true;
-        else
-            return false;
+        return false;
     }
-
 
 
     /** from input buffers selects the tuples satisfying join condition
@@ -141,28 +146,11 @@ public class BlockNestedJoin extends Join{
                 this.leftbatches.clear();
                 this.leftTuples.clear();
                 //load leftbatches with data
-                for(int m=0; m< (numBuff-2); m++) {
-                    Batch batch = left.next(); // get next batch of data
-                    if(batch != null) leftbatches.add(batch);
-                }
+                loadLeftBatches();
                 //Load data from batch to leftTuples
-                for(int m=0; m<leftbatches.size(); m++) {
-                    Batch batch = leftbatches.get(m);
-                    for(int n=0; n< batch.size(); n++)
-                        leftTuples.add(batch.elementAt(n));
-                }
+                loadTuplesFromBatch();
                 //if batch is empty reinitialise right materialized stream
-                if(!(leftbatches.size()==0)) {
-                    try{
-                        FileInputStream fis = new FileInputStream(rfname);
-                        InputStream buff = new BufferedInputStream(fis);
-                        in = new ObjectInputStream(buff);
-                        eosr = false;
-                    } catch (Exception e) {
-                        System.out.println("Error in block nested loop in reading of data");
-                        exit(1);
-                    }
-                }
+                reinitialiseRightMaterializedStream();
                 if(leftbatches.size()==0){
                     eosl=true;
                     return outbatch;
@@ -186,22 +174,7 @@ public class BlockNestedJoin extends Join{
                                 //Debug.PPrint(outtuple);
                                 //System.out.println();
                                 outbatch.add(outtuple);
-                                if(outbatch.isFull()){
-                                    if(i== leftTuples.size()-1 && j==rightbatch.size()-1){//case 1 both left and right batch done
-                                        lcurs=0;
-                                        rcurs=0;
-                                    }else if(i!= leftTuples.size()-1 && j==rightbatch.size()-1){//case 2 right batch done
-                                        lcurs = i+1;
-                                        rcurs = 0;
-                                    }else if(i== leftTuples.size()-1 && j!=rightbatch.size()-1){//case 3 next tuple in right batch
-                                        lcurs = i;
-                                        rcurs = j+1;
-                                    }else{
-                                        lcurs = i;
-                                        rcurs =j+1;
-                                    }
-                                    return outbatch;
-                                }
+                                if (outbatchFull(i, j, outbatch)) return outbatch;
                             }
                         }
                         rcurs =0;
@@ -225,25 +198,29 @@ public class BlockNestedJoin extends Join{
         }
         return outbatch;
     }
-/*
-    public void loadLeftBatches() {
-        //Clear any existing data
-        this.leftbatches.clear();
-        this.leftTuples.clear();
-        Batch batch;
-        //load leftbatches with data
-        for(int i=0; i< (numBuff-2); i++) {
-            batch = left.next(); // get next batch of data
-            if(batch != null) leftbatches.add(batch);
+
+    private boolean outbatchFull(int i, int j, Batch outbatch) {
+        if(outbatch.isFull()){
+            if(i== leftTuples.size()-1 && j==rightbatch.size()-1){//case 1 both left and right batch done
+                lcurs=0;
+                rcurs=0;
+            }else if(i!= leftTuples.size()-1 && j==rightbatch.size()-1){//case 2 right batch done
+                lcurs = i+1;
+                rcurs = 0;
+            }else if(i== leftTuples.size()-1 && j!=rightbatch.size()-1){//case 3 next tuple in right batch
+                lcurs = i;
+                rcurs = j+1;
+            }else{
+                lcurs = i;
+                rcurs =j+1;
+            }
+            return true;
         }
-        //Load data from batch to leftTuples
-        for(int i=0; i<leftbatches.size(); i++) {
-            batch = leftbatches.get(i);
-            for(int j=0; j<batch.size(); j++)
-                leftTuples.add(batch.elementAt(j));
-        }
-        //if batch is empty reinitialise right materialized stream
-        if(leftbatches.size() == 0) {
+        return false;
+    }
+
+    private void reinitialiseRightMaterializedStream() {
+        if(!(leftbatches.size()==0)) {
             try{
                 FileInputStream fis = new FileInputStream(rfname);
                 InputStream buff = new BufferedInputStream(fis);
@@ -254,7 +231,22 @@ public class BlockNestedJoin extends Join{
                 exit(1);
             }
         }
-    }*/
+    }
+
+    private void loadTuplesFromBatch() {
+        for(int m=0; m<leftbatches.size(); m++) {
+            Batch batch = leftbatches.get(m);
+            for(int n=0; n< batch.size(); n++)
+                leftTuples.add(batch.elementAt(n));
+        }
+    }
+
+    private void loadLeftBatches() {
+        for(int m=0; m< (numBuff-2); m++) {
+            Batch batch = left.next(); // get next batch of data
+            if(batch != null) leftbatches.add(batch);
+        }
+    }
 
     /** Close the operator */
     public boolean close(){
