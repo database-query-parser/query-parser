@@ -32,7 +32,7 @@ public class ExternalSort extends Operator {
     private int passNum;
     private int runNum;
 
-    private Attribute joinAttribute;
+    private Vector<Attribute> joinAttributes;
 
     private Vector<File> sortedRunFiles;
 
@@ -40,13 +40,26 @@ public class ExternalSort extends Operator {
 
     private Comparator<Tuple> comparator;
 
+    private boolean isDistinct = false;
+
     public ExternalSort(Operator table, Attribute joinAttribute, int numBuff) {
         super(OpType.SORT);
         this.table = table;
         this.numBuff = numBuff;
         this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
-        this.joinAttribute = joinAttribute;
+        Vector<Attribute> temp = new Vector<>();
+        this.joinAttributes.add(joinAttribute);
         this.fileNum = instanceNum++;
+    }
+
+    public ExternalSort(Operator table, Vector<Attribute> joinAttributes, int numBuff) {
+        super(OpType.SORT);
+        this.table = table;
+        this.numBuff = numBuff;
+        this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
+        this.joinAttributes = joinAttributes;
+        this.fileNum = instanceNum++;
+        this.isDistinct = true;
     }
 
     public boolean open() {
@@ -57,15 +70,18 @@ public class ExternalSort extends Operator {
         passNum = 0;
         runNum = 0;
         sortedRunFiles = new Vector<>();
-        comparator = generateComparator();
 
-        /** Phase 1 */
-        generateRuns();
-        passNum++;
-        runNum = 0;
+        for (Attribute attribute : joinAttributes) {
+            comparator = generateComparator(attribute);
 
-        /** Phase 2 */
-        executeMerge();
+            /** Phase 1 */
+            generateRuns();
+            passNum++;
+            runNum = 0;
+
+            /** Phase 2 */
+            executeMerge();
+        }
 
         return true;
     }
@@ -309,21 +325,23 @@ public class ExternalSort extends Operator {
         }
     }
 
-    private Comparator<Tuple> generateComparator() {
-        return new SortComparator(table.getSchema());
+    private Comparator<Tuple> generateComparator(Attribute attribute) {
+        return new SortComparator(table.getSchema(), attribute);
     }
 
     class SortComparator implements Comparator<Tuple> {
 
         private Schema schema;
+        private Attribute attribute;
 
-        SortComparator(Schema schema) {
+        SortComparator(Schema schema, Attribute attribute) {
             this.schema = schema;
+            this.attribute = attribute;
         }
 
         @Override
         public int compare(Tuple t1, Tuple t2) {
-            int joinIndex = schema.indexOf(joinAttribute);
+            int joinIndex = schema.indexOf(attribute);
             return Tuple.compareTuples(t1, t2, joinIndex);
         }
     }
@@ -334,5 +352,9 @@ public class ExternalSort extends Operator {
         } catch (IOException io) {
             System.out.println("ES: IOException error closing input stream");
         }
+    }
+
+    public void setDistinct(boolean value) {
+        isDistinct = value;
     }
 }

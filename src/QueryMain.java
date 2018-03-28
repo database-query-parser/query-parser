@@ -1,6 +1,7 @@
 /** This is main driver program of the query processor **/
 
 import java.io.*;
+import java.util.Vector;
 
 import qp.utils.*;
 import qp.operators.*;
@@ -132,6 +133,13 @@ public class QueryMain{
 	/** preparing the execution plan **/
 
 	Operator root = RandomOptimizer.makeExecPlan(logicalroot);
+
+	if (sqlquery.isDistinct()) {
+		Schema schema = root.getSchema();
+		Vector attributes = sqlquery.getProjectList();
+		root = new ExternalSort(root, attributes, numBuff);
+		root.setSchema(schema);
+	}
 
 /** Print final Plan **/
 	System.out.println("----------------------Execution Plan----------------");
