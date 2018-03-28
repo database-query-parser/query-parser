@@ -121,6 +121,7 @@ public class QueryMain{
 **/
 
 	RandomOptimizer ro = new RandomOptimizer(sqlquery);
+	//GreedyOptimizer ro = new GreedyOptimizer(sqlquery);
 	Operator logicalroot = ro.getOptimizedPlan();
 	if(logicalroot==null){
 	    System.out.println("root is null");
@@ -178,6 +179,7 @@ long starttime = System.currentTimeMillis();
 	numAtts = schema.getNumCols();
 	printSchema(schema);
 	Batch resultbatch;
+
 
 
 	/** print each tuple in the result **/
