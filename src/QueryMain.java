@@ -103,7 +103,6 @@ public class QueryMain{
 	}
 
 
-
 /** This part is used When some random initial plan is required instead of comple optimized plan **/
 /**
 
@@ -136,9 +135,11 @@ public class QueryMain{
 
 	if (sqlquery.isDistinct()) {
 		Schema schema = root.getSchema();
-		Vector attributes = sqlquery.getProjectList();
-		root = new ExternalSort(root, attributes, numBuff);
-		root.setSchema(schema);
+		Vector attributes = schema.getAttList();
+		for (Object o : attributes) {
+			root = new ExternalSort(root, (Attribute) o, numBuff, true);
+			root.setSchema(schema);
+		}
 	}
 
 /** Print final Plan **/

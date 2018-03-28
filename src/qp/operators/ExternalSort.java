@@ -32,7 +32,7 @@ public class ExternalSort extends Operator {
     private int passNum;
     private int runNum;
 
-    private Vector<Attribute> joinAttributes;
+    private Attribute joinAttribute;
 
     private Vector<File> sortedRunFiles;
 
@@ -42,24 +42,14 @@ public class ExternalSort extends Operator {
 
     private boolean isDistinct = false;
 
-    public ExternalSort(Operator table, Attribute joinAttribute, int numBuff) {
+    public ExternalSort(Operator table, Attribute joinAttribute, int numBuff, boolean flag) {
         super(OpType.SORT);
         this.table = table;
         this.numBuff = numBuff;
         this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
-        Vector<Attribute> temp = new Vector<>();
-        this.joinAttributes.add(joinAttribute);
+        this.joinAttribute = joinAttribute;
         this.fileNum = instanceNum++;
-    }
-
-    public ExternalSort(Operator table, Vector<Attribute> joinAttributes, int numBuff) {
-        super(OpType.SORT);
-        this.table = table;
-        this.numBuff = numBuff;
-        this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
-        this.joinAttributes = joinAttributes;
-        this.fileNum = instanceNum++;
-        this.isDistinct = true;
+        this.isDistinct = flag;
     }
 
     public boolean open() {
@@ -68,20 +58,20 @@ public class ExternalSort extends Operator {
         }
 
         passNum = 0;
+
         runNum = 0;
         sortedRunFiles = new Vector<>();
+        comparator = generateComparator();
 
-        for (Attribute attribute : joinAttributes) {
-            comparator = generateComparator(attribute);
+        /** Phase 1 */
+        generateRuns();
+        passNum++;
+        runNum = 0;
 
-            /** Phase 1 */
-            generateRuns();
-            passNum++;
-            runNum = 0;
+        System.out.println("No. of sorted runs: " + sortedRunFiles.size());
 
-            /** Phase 2 */
-            executeMerge();
-        }
+        /** Phase 2 */
+        executeMerge();
 
         return true;
     }
@@ -95,6 +85,7 @@ public class ExternalSort extends Operator {
         } catch (IOException ioe) {
             System.out.println("ExternalSort: next() error");
         } catch (ArrayIndexOutOfBoundsException aioofe) { // no join result
+            aioofe.printStackTrace();
             return null;
         }
         return null;
@@ -106,6 +97,7 @@ public class ExternalSort extends Operator {
         } catch (IOException io) {
             System.out.println("ExternalSort: close() error");
         } catch (NullPointerException npe) {
+            npe.printStackTrace();
             System.out.println("ExternalSort: no join result");
         }
         clearTempFiles(sortedRunFiles);
@@ -325,8 +317,8 @@ public class ExternalSort extends Operator {
         }
     }
 
-    private Comparator<Tuple> generateComparator(Attribute attribute) {
-        return new SortComparator(table.getSchema(), attribute);
+    private Comparator<Tuple> generateComparator() {
+        return new SortComparator(table.getSchema(), joinAttribute);
     }
 
     class SortComparator implements Comparator<Tuple> {
