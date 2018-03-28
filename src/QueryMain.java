@@ -120,8 +120,8 @@ public class QueryMain{
 	    execution plan
 **/
 
-	RandomOptimizer ro = new RandomOptimizer(sqlquery);
-	//GreedyOptimizer ro = new GreedyOptimizer(sqlquery);
+	//RandomOptimizer ro = new RandomOptimizer(sqlquery);
+	GreedyOptimizer ro = new GreedyOptimizer(sqlquery);
 	Operator logicalroot = ro.getOptimizedPlan();
 	if(logicalroot==null){
 	    System.out.println("root is null");

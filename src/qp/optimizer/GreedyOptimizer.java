@@ -6,6 +6,8 @@ import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.Vector;
 
+import qp.operators.Join;
+import qp.operators.JoinType;
 import qp.operators.OpType;
 import qp.operators.Operator;
 import qp.operators.Scan;
@@ -98,12 +100,39 @@ public class GreedyOptimizer {
 
     private void createJoinOp() {
 
-        int cost = Integer.MAX_VALUE;
+        Operator rootWithMinCost = null;
+        Operator temp = null;
+        int minCost = Integer.MAX_VALUE;
+        PlanCost pc;
+        Join jn = null;
         for (int i = 0; i < joinList.size(); i++) {
             Condition con = (Condition) joinList.get(i);
             String lefttab = con.getLhs().getTabName();
             String righttab = ((Attribute) con.getRhs()).getTabName();
-            System.out.println(i + "/" + joinList.size() + ": " + lefttab + " " + righttab);
+
+            Operator left = (Operator) tab_op_hash.get(lefttab);
+            Operator right = (Operator) tab_op_hash.get(righttab);
+
+            jn = new Join(left, right, con, OpType.JOIN);
+            Schema newSchema = left.getSchema().joinWith(right.getSchema());
+            jn.setSchema(newSchema);
+
+            int numJoinMethod = JoinType.numJoinTypes();
+            System.out.println("Number of join methods: " + numJoinMethod);
+            for (int j = 0; j < numJoinMethod; j++) {
+                jn.setJoinType(j);
+                modifyHashtable(left,jn);
+                modifyHashtable(right,jn);
+                temp = jn;
+
+                pc = new PlanCost();
+                int cost = pc.getCost(temp);
+                System.out.println(cost);
+                if (cost < minCost) {
+                    minCost = cost;
+                    rootWithMinCost = temp;
+                }
+            }
         }
         System.exit(2);
     }
@@ -126,7 +155,7 @@ public class GreedyOptimizer {
     }
 
     public Operator getOptimizedPlan() {
-        //preparePlan();
+        Operator plan = preparePlan();
         int MINCOST = Integer.MAX_VALUE;
         Operator finalPlan = null;
         return finalPlan;
