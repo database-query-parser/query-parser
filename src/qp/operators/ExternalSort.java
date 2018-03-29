@@ -33,6 +33,7 @@ public class ExternalSort extends Operator {
     private int runNum;
 
     private Attribute joinAttribute;
+    private Vector joinAttributes = null; // For distinct
 
     private Vector<File> sortedRunFiles;
 
@@ -40,13 +41,27 @@ public class ExternalSort extends Operator {
 
     private Comparator<Tuple> comparator;
 
-    public ExternalSort(Operator table, Attribute joinAttribute, int numBuff) {
+    private boolean isDistinct = false;
+
+    public ExternalSort(Operator table, Attribute joinAttribute, int numBuff, boolean flag) {
         super(OpType.SORT);
         this.table = table;
         this.numBuff = numBuff;
         this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
         this.joinAttribute = joinAttribute;
         this.fileNum = instanceNum++;
+        this.isDistinct = flag;
+    }
+
+    // Overloaded constructor for removing duplicates
+    public ExternalSort(Operator table, Vector joinAttributes, int numBuff, boolean flag) {
+        super(OpType.SORT);
+        this.table = table;
+        this.numBuff = numBuff;
+        this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
+        this.joinAttributes = joinAttributes;
+        this.fileNum = instanceNum++;
+        this.isDistinct = flag;
     }
 
     public boolean open() {
@@ -57,7 +72,7 @@ public class ExternalSort extends Operator {
         passNum = 0;
         runNum = 0;
         sortedRunFiles = new Vector<>();
-        comparator = generateComparator();
+        comparator = isDistinct ? generateComparator(joinAttributes, isDistinct) : generateComparator();
 
         /** Phase 1 */
         generateRuns();
@@ -146,8 +161,27 @@ public class ExternalSort extends Operator {
     private void executeMerge() {
         int numUsableBuff = numBuff - 1;
 
+        // Actually > 0 can... Leave it first
         while (sortedRunFiles.size() > 1) {
             int totalSortedRuns = sortedRunFiles.size();
+            Vector<File> newSortedRuns = new Vector<>();
+            for (int i = 0; i * numUsableBuff < totalSortedRuns; i++) {
+                int startIndex = i * numUsableBuff;
+                int endIndex = (i + 1) * numUsableBuff;
+                endIndex = Math.min(endIndex, sortedRunFiles.size()); // for last runs
+
+                List<File> runsToSort = sortedRunFiles.subList(startIndex, endIndex);
+                File newSortedRun = mergeSortedRuns(runsToSort);
+                newSortedRuns.add(newSortedRun);
+            }
+
+            passNum++;
+            runNum = 0;
+
+            clearTempFiles(sortedRunFiles);
+            sortedRunFiles = newSortedRuns;
+        } if (sortedRunFiles.size() == 1) {
+            int totalSortedRuns = 1;
             Vector<File> newSortedRuns = new Vector<>();
             for (int i = 0; i * numUsableBuff < totalSortedRuns; i++) {
                 int startIndex = i * numUsableBuff;
@@ -198,6 +232,7 @@ public class ExternalSort extends Operator {
         Batch outputBuffer = new Batch(batchSize);
         File output = null;
         int[] batchTrackers = new int[numBuffers];
+        Tuple lastTuple = null;
 
         while (true) {
             Tuple smallest = null;
@@ -227,7 +262,22 @@ public class ExternalSort extends Operator {
                     batchTrackers[indexOfSmallest] = 0; // reset tracker to 0 for new batch
                 }
             }
-            outputBuffer.add(smallest);
+
+            if (isDistinct) {
+                // If it is the same as the last item you added to your output list, throw it away
+                // otherwise, add it to your output list
+                if (lastTuple != null && comparator.compare(lastTuple, smallest) != 0) {
+                    outputBuffer.add(smallest);
+                    lastTuple = smallest; // update the last tuple added into the output buffer
+                } else if (lastTuple == null) {
+                    outputBuffer.add(smallest);
+                    lastTuple = smallest;
+                } else if (comparator.compare(lastTuple, smallest) == 0) {
+                    // Duplicates detected, ignore
+                }
+            } else {
+                outputBuffer.add(smallest);
+            }
 
             // write to file if full
             if (outputBuffer.isFull()) {
@@ -313,18 +363,51 @@ public class ExternalSort extends Operator {
         return new SortComparator(table.getSchema());
     }
 
+    // Comparator for DISTINCT
+    private Comparator<Tuple> generateComparator(Vector joinAttributes, boolean flag) {
+        return new SortComparator(table.getSchema(), joinAttributes, flag);
+    }
+
     class SortComparator implements Comparator<Tuple> {
 
         private Schema schema;
+        private Vector joinAttributes = null;
+        private  boolean isDistinct = false;
 
         SortComparator(Schema schema) {
             this.schema = schema;
         }
+        //for distinct
+        SortComparator(Schema schema, Vector joinAttributes, boolean flag) {
+            this.schema = schema;
+            this.joinAttributes = joinAttributes;
+            this.isDistinct = flag;
+        }
 
         @Override
         public int compare(Tuple t1, Tuple t2) {
-            int joinIndex = schema.indexOf(joinAttribute);
-            return Tuple.compareTuples(t1, t2, joinIndex);
+            boolean hasSameAttr = true;
+            int finalComparisonResult = 0;
+            if (!isDistinct) {
+                int joinIndex = schema.indexOf(joinAttribute);
+                return Tuple.compareTuples(t1, t2, joinIndex);
+            } else {
+                Vector attList = joinAttributes;
+
+                for (int i = 0; i < attList.size(); i++) {
+                    int index = schema.indexOf((Attribute) attList.get(i));
+                    int result = Tuple.compareTuples(t1, t2, index);
+                    finalComparisonResult = result;
+                    if (result != 0) {
+                        hasSameAttr = false;
+                        break;
+                    }
+                }
+
+                // if hasSameAttr == true after going through the comparator the tuple is a duplicate
+                // Hence, return 0. Else return the comparison result
+                return hasSameAttr ? 0 : finalComparisonResult;
+            }
         }
     }
 
@@ -334,5 +417,9 @@ public class ExternalSort extends Operator {
         } catch (IOException io) {
             System.out.println("ES: IOException error closing input stream");
         }
+    }
+
+    public void setDistinct(boolean value) {
+        isDistinct = value;
     }
 }

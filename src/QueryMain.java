@@ -1,6 +1,7 @@
 /** This is main driver program of the query processor **/
 
 import java.io.*;
+import java.util.Vector;
 
 import qp.utils.*;
 import qp.operators.*;
@@ -78,14 +79,13 @@ public class QueryMain{
 	    buffers available
 	**/
 
-
-	if(numJoin !=0){
+	if(numJoin != 0){
 	    System.out.println("enter the number of buffers available");
 
 	    try {
-		temp = in.readLine();
-		int numBuff = Integer.parseInt(temp);
-		BufferManager bm = new BufferManager(numBuff,numJoin);
+			temp = in.readLine();
+			int numBuff = Integer.parseInt(temp);
+			BufferManager bm = new BufferManager(numBuff, numJoin);
 	    } catch (Exception e) {
 		e.printStackTrace();
 	 }
@@ -101,7 +101,16 @@ public class QueryMain{
 	    System.exit(1);
 	}
 
+	 if (sqlquery.isDistinct() && numJoin == 0) {
+		System.out.println("enter the number of buffers available");
 
+		try {
+			temp = in.readLine();
+			numBuff = Integer.parseInt(temp);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
 
 /** This part is used When some random initial plan is required instead of comple optimized plan **/
 /**
@@ -133,6 +142,22 @@ public class QueryMain{
 	/** preparing the execution plan **/
 
 	Operator root = RandomOptimizer.makeExecPlan(logicalroot);
+
+	if (sqlquery.isDistinct()) {
+		Schema schema = root.getSchema();
+		Vector attributes = schema.getAttList();
+
+		// Loop through the attributes and sort it accordingly
+		for (int i = attributes.size() - 1; i >= 0; i--) {
+			root = new ExternalSort(root, (Attribute) attributes.get(i), numBuff, false);
+			root.setSchema(schema);
+		}
+
+		// Set the root to remove duplicates at this stage with all the attributes
+		root = new ExternalSort(root, attributes, numBuff, true);
+		root.setSchema(schema);
+
+	}
 
 /** Print final Plan **/
 	System.out.println("----------------------Execution Plan----------------");
