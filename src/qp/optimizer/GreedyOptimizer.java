@@ -10,6 +10,7 @@ import qp.operators.Join;
 import qp.operators.JoinType;
 import qp.operators.OpType;
 import qp.operators.Operator;
+import qp.operators.Project;
 import qp.operators.Scan;
 import qp.operators.Select;
 import qp.utils.Attribute;
@@ -27,6 +28,8 @@ public class GreedyOptimizer {
     private Vector selectionList;
     private Vector joinList;
     private Vector groupByList;
+
+    private Vector tempJoinList;
 
     private Hashtable tab_op_hash;
     private Operator root;
@@ -101,14 +104,19 @@ public class GreedyOptimizer {
     private void createJoinOp() {
 
         Operator rootWithMinCost = null;
-        Operator temp = null;
         int minCost = Integer.MAX_VALUE;
         PlanCost pc;
-        Join jn = null;
-        for (int i = 0; i < joinList.size(); i++) {
-            Condition con = (Condition) joinList.get(i);
+        Join jn;
+        tempJoinList = (Vector) joinList.clone();
+
+        for (int i = 0; i < tempJoinList.size(); i++) {
+            Condition con = (Condition) tempJoinList.get(i);
             String lefttab = con.getLhs().getTabName();
             String righttab = ((Attribute) con.getRhs()).getTabName();
+
+            Operator brara = (Operator) tab_op_hash.get("dawaawdadw");
+            if (brara == null)
+                System.out.println("rar");
 
             Operator left = (Operator) tab_op_hash.get(lefttab);
             Operator right = (Operator) tab_op_hash.get(righttab);
@@ -118,27 +126,39 @@ public class GreedyOptimizer {
             jn.setSchema(newSchema);
 
             int numJoinMethod = JoinType.numJoinTypes();
-            System.out.println("Number of join methods: " + numJoinMethod);
             for (int j = 0; j < numJoinMethod; j++) {
+                System.out.print(lefttab + " x " + righttab + " with join type: " + j + " ");
                 jn.setJoinType(j);
                 modifyHashtable(left,jn);
                 modifyHashtable(right,jn);
-                temp = jn;
 
                 pc = new PlanCost();
-                int cost = pc.getCost(temp);
-                System.out.println(cost);
+                int cost = pc.getCost(jn);
+                System.out.println("Cost: " + cost + " Operator: " + jn + " " + jn.getJoinType());
                 if (cost < minCost) {
                     minCost = cost;
-                    rootWithMinCost = temp;
+                    rootWithMinCost = (Operator) jn.clone();
                 }
             }
         }
-        System.exit(2);
+
+        if (numJoin != 0) {
+            root = rootWithMinCost;
+            System.out.println("Min cost: " + minCost + " Operator: " + rootWithMinCost + " " + ((Join) rootWithMinCost).getJoinType());
+        }
     }
 
     private void createProjectOp() {
+        Operator base = root;
+        if ( projectList == null )
+            projectList = new Vector();
 
+        if(!projectList.isEmpty()){
+            root = new Project(base,projectList,OpType.PROJECT);
+            Schema newSchema = base.getSchema().subSchema(projectList);
+            root.setSchema(newSchema);
+        }
+        System.exit(2);
     }
 
     public Operator preparePlan() {
