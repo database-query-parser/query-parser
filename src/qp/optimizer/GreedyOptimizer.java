@@ -176,7 +176,6 @@ public class GreedyOptimizer {
             Schema newSchema = base.getSchema().subSchema(projectList);
             root.setSchema(newSchema);
         }
-        System.exit(2);
     }
 
     private void modifyJoinOp(int listIndex, int methodIndex) {
@@ -215,9 +214,10 @@ public class GreedyOptimizer {
 
     public Operator getOptimizedPlan() {
         Operator plan = preparePlan();
-        int MINCOST = Integer.MAX_VALUE;
-        Operator finalPlan = null;
-        return finalPlan;
+        PlanCost pc = new PlanCost();
+        int cost = pc.getCost(plan);
+        System.out.println("\nFinal cost after project: " + cost);
+        return plan;
     }
 
     public int getNumJoin() {
