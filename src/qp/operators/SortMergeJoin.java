@@ -91,8 +91,8 @@ public class SortMergeJoin extends Join {
         rightindex = right.getSchema().indexOf(rightattr);
 
         // Sorts both left and right relations
-        leftSort = new ExternalSort(left, leftattr, numBuff);
-        rightSort = new ExternalSort(right, rightattr, numBuff);
+        leftSort = new ExternalSort(left, leftattr, numBuff, false);
+        rightSort = new ExternalSort(right, rightattr, numBuff, false);
 
         if (!(leftSort.open() && (rightSort.open()))) {
             return false;
