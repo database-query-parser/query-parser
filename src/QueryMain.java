@@ -147,12 +147,6 @@ public class QueryMain{
 		Schema schema = root.getSchema();
 		Vector attributes = schema.getAttList();
 
-		// Loop through the attributes and sort it accordingly
-		for (int i = attributes.size() - 1; i >= 0; i--) {
-			root = new ExternalSort(root, (Attribute) attributes.get(i), numBuff, false);
-			root.setSchema(schema);
-		}
-
 		// Set the root to remove duplicates at this stage with all the attributes
 		root = new ExternalSort(root, attributes, numBuff, true);
 		root.setSchema(schema);
