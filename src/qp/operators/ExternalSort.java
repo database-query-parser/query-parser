@@ -422,4 +422,8 @@ public class ExternalSort extends Operator {
     public void setDistinct(boolean value) {
         isDistinct = value;
     }
+
+    public Operator getTable() {
+        return table;
+    }
 }
