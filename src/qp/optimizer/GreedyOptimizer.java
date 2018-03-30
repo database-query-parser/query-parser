@@ -154,7 +154,7 @@ public class GreedyOptimizer {
             System.out.println("----- End of Iteration " + (currJoinOp+1) + " -----");
             System.out.println("Iteration " + (currJoinOp+1) + " Minimum Cost: " + minCost);
 
-            modifyJoinOp(tempJoinIndex, tempJoinMethodIndex);
+            jn = modifyJoinOp(tempJoinIndex, tempJoinMethodIndex);
             joinSelected[tempJoinIndex] = 1;
             currJoinOp++;
         }
@@ -178,7 +178,7 @@ public class GreedyOptimizer {
         }
     }
 
-    private void modifyJoinOp(int listIndex, int methodIndex) {
+    private Join modifyJoinOp(int listIndex, int methodIndex) {
         Condition con = (Condition) joinList.get(listIndex);
         String lefttab = con.getLhs().getTabName();
         String righttab = ((Attribute) con.getRhs()).getTabName();
@@ -197,6 +197,8 @@ public class GreedyOptimizer {
 
         modifyHashtable(left,jn);
         modifyHashtable(right,jn);
+
+        return jn;
     }
 
     public Operator preparePlan() {
