@@ -182,10 +182,21 @@ public class SortMergeJoin extends Join {
                 rightBatchIndex++;
                 rightbatch = getRightBuffer();
                 if (rightbatch == null) {
-                    close();
-                    return outbatch.isEmpty() ? null : outbatch;
+                    if (hasMatch) {
+                        lcurs++;
+                        rcurs = rightFirstMatchIndex;
+                        if (rightBatchIndex > rightFirstMatchBatchIndex) {
+                            rightBatchIndex = rightFirstMatchBatchIndex;
+                            rightbatch = getRightBuffer();
+                        }
+                        hasMatch = false;
+                    } else {
+                        close();
+                        return outbatch.isEmpty() ? null : outbatch;
+                    }
+                } else {
+                    rcurs = 0;
                 }
-                rcurs = 0;
             }
 
             while (lcurs < leftbatch.size() && rcurs < rightbatch.size()) {
@@ -195,8 +206,11 @@ public class SortMergeJoin extends Join {
                 if (comparison < 0) {  // left tuple < right tuple
                     lcurs++;  // move to next left tuple
                     if (hasMatch) {
-                        rightFirstMatchIndex = rcurs;
-                        rightFirstMatchBatchIndex = rightBatchIndex;
+                        rcurs = rightFirstMatchIndex;
+                        if (rightBatchIndex > rightFirstMatchBatchIndex) {
+                            rightBatchIndex = rightFirstMatchBatchIndex;
+                            rightbatch = getRightBuffer();
+                        }
                     }
                     hasMatch = false;
                 } else if (comparison > 0) {  // left tuple > right tuple
@@ -204,11 +218,8 @@ public class SortMergeJoin extends Join {
                     hasMatch = false;
                 } else { // match
                     if (!hasMatch) {
-                        rcurs = rightFirstMatchIndex;
-                        if (rightBatchIndex > rightFirstMatchBatchIndex) {
-                            rightBatchIndex = rightFirstMatchBatchIndex;
-                            rightbatch = getRightBuffer(rightFirstMatchBatchIndex);
-                        }
+                        rightFirstMatchIndex = rcurs;
+                        rightFirstMatchBatchIndex = rightBatchIndex;
                         hasMatch = true;
                     }
                     Tuple joinTuple = leftTuple.joinWith(rightTuple);
@@ -285,23 +296,6 @@ public class SortMergeJoin extends Join {
         }
         return batch;
     }
-
-    private Batch getRightBuffer(int index) {
-        Batch batch = null;
-        File file = sortedRightFiles.get(index);
-        try {
-            in = new ObjectInputStream(new FileInputStream(file));
-            batch = (Batch) in.readObject();
-            in.close();
-        } catch (IOException ioe) {
-            System.out.println("SortMergeJoin: IOException in reading sortedRightFiles at next()");
-        } catch (ClassNotFoundException cnfe) {
-            System.out.println("SortMergeJoin: ClassNotFoundException in deserialization");
-        }
-        rightBatchIndex++;
-        return batch;
-    }
-
 
 
     private List<File> writeSortedFiles(Operator op, String filePrefix) throws IOException {
