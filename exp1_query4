@@ -1,0 +1,3 @@
+SELECT Employees.eid
+FROM Employees, Certified, Aircrafts, Schedule, Flights
+WHERE Employees.eid = Certified.eid, Certified.aid = Aircrafts.aid, Aircrafts.aid = Schedule.aid, Schedule.flno = Flights.flno
