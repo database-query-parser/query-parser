@@ -111,6 +111,10 @@ public class Debug{
 
 	}else if(optype==OpType.SCAN){
 	    System.out.print(((Scan)node).getTabName());
+	} else if(optype==OpType.SORT) {
+		System.out.print("ExternalSort(");
+		PPrint(((ExternalSort)node).getTable());
+		System.out.print(")");
 	}
     }
 
