@@ -98,7 +98,7 @@ The Sort-Merge Join algorithm is written in `SortMergeJoin` as an `Operator` obj
 
 ==== Sorting phase
 
-Two `ExternalSort` object has been created to sort both the left and right table.
+Two `ExternalSort` objects are created to sort both the left and right table.
 
 ----
 leftSort = new ExternalSort(left, leftattr, numBuff, false);
