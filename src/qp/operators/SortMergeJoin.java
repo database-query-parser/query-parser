@@ -160,6 +160,7 @@ public class SortMergeJoin extends Join {
 
         while (!outbatch.isFull()) {
 
+            /** Loads the leftbatches **/
             if (lcurs == leftbatch.size()) {
                 leftBatchIndex++;
                 if (leftBatchIndex < leftbatches.size()) {
@@ -178,16 +179,18 @@ public class SortMergeJoin extends Join {
                 lcurs = 0;
             }
 
+            /** Loads the right batch **/
             if (rcurs == rightbatch.size()) {
                 rightBatchIndex++;
                 rightbatch = getRightBuffer();
                 if (rightbatch == null) {
+                    // if reached the end, but there may be another duplicate value in lefttuple
                     if (hasMatch) {
                         lcurs++;
-                        rcurs = rightFirstMatchIndex;
+                        rcurs = rightFirstMatchIndex; // points back to the first right tuple containing that value
                         if (rightBatchIndex > rightFirstMatchBatchIndex) {
                             rightBatchIndex = rightFirstMatchBatchIndex;
-                            rightbatch = getRightBuffer();
+                            rightbatch = getRightBuffer(); // fetch the batch containing that tuple
                         }
                         hasMatch = false;
                     } else {
@@ -206,9 +209,10 @@ public class SortMergeJoin extends Join {
                 if (comparison < 0) {  // left tuple < right tuple
                     lcurs++;  // move to next left tuple
                     if (hasMatch) {
+                        // points to the very first rightTuple if next leftTuple contains same value again
                         rcurs = rightFirstMatchIndex;
                         if (rightBatchIndex > rightFirstMatchBatchIndex) {
-                            rightBatchIndex = rightFirstMatchBatchIndex;
+                            rightBatchIndex = rightFirstMatchBatchIndex; // fetch the batch containing that tuple
                             rightbatch = getRightBuffer();
                         }
                     }

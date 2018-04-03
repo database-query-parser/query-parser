@@ -240,6 +240,7 @@ public class ExternalSort extends Operator {
             int indexOfSmallest = 0;
             for (int i = 0; i < inputBuffers.size(); i++) {
                 Batch batch = inputBuffers.get(i);
+                // if all the tuples in the ith inputBuffers has been added to outputBuffer
                 if (batchTrackers[i] >= batch.size())
                     continue;
 
@@ -251,15 +252,14 @@ public class ExternalSort extends Operator {
             }
 
             if (smallest == null)
-                    break;
+                break;
 
             batchTrackers[indexOfSmallest]++; // increase batch index containing smallest
-            // if the batch from a run containing the smallest so far is completely read finish:
+            // if the batch from a run containing the smallest so far is completely read:
             if (batchTrackers[indexOfSmallest] == inputBuffers.get(indexOfSmallest).capacity()) {
-                // reload the next batch of the same run
                 Batch nextBatch = readBatch(inputStreams.get(indexOfSmallest));
                 if (nextBatch != null) {
-                    inputBuffers.set(indexOfSmallest, nextBatch);
+                    inputBuffers.set(indexOfSmallest, nextBatch); // replace the next batch to that buffer
                     batchTrackers[indexOfSmallest] = 0; // reset tracker to 0 for new batch
                 }
             }
