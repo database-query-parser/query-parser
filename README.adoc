@@ -30,14 +30,14 @@ The external sort algorithm is written in `ExternalSort` as an `Operator` object
 
 ----
 public ExternalSort(Operator table, Attribute joinAttribute, int numBuff, boolean flag) {
-        super(OpType.SORT);
-        this.table = table;
-        this.numBuff = numBuff;
-        this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
-        this.joinAttribute = joinAttribute;
-        this.fileNum = instanceNum++;
-        this.isDistinct = flag;
-    }
+    super(OpType.SORT);
+    this.table = table;
+    this.numBuff = numBuff;
+    this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
+    this.joinAttribute = joinAttribute;
+    this.fileNum = instanceNum++;
+    this.isDistinct = flag;
+}
 ----
 
 Since external sort is required to generate temporary files to store intermediate results, a unique variable is assigned to each instance of `ExternalSort` created. This is achieved by creating a static variable `instanceNum`, which is assigned to `fileNum` in the constructor as the unique number. The `instanceNum` is incremented which will be used as the next unique number when another `ExternalSort` object is created.
