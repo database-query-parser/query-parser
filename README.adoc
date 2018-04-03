@@ -1,0 +1,34 @@
+= CS3223 Project
+:toc:
+:toc-title:
+:toc-placement: preamble
+:sectnums:
+:imagesDir: images
+:stylesDir: stylesheets
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+endif::[]
+ifdef::env-github,env-browser[:outfilesuffix: .adoc]
+
+Project Team Members:
+
+* Chua Wei Wen (A0156034M)
+* Khor Shao Liang (A0160529E)
+* Sim Kwan Tiong, Damien (A0155983N)
+
+== Introduction
+This document provides details on the features that has been implemented into the query processing engine.
+
+== Implementation
+The following features are implemented:
+
+=== Block-Nested Loop Join
+
+=== External Sort
+
+=== Sort-Merge Join
+
+=== Distinct
+
+=== Greedy Optimizer
