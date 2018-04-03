@@ -30,8 +30,6 @@ public class GreedyOptimizer {
     private Vector joinList;
     private Vector groupByList;
 
-    private Vector tempJoinList;
-
     private Hashtable tab_op_hash;
     private Operator root;
 
@@ -102,16 +100,17 @@ public class GreedyOptimizer {
         }
     }
 
+    /** create join operators **/
+
     private void createJoinOp() {
 
         int minCost = Integer.MAX_VALUE;
         PlanCost pc;
         Join jn = null;
-        tempJoinList = (Vector) joinList.clone();
 
         int currJoinOp = 0;
-        int tempJoinIndex = 0;
-        int tempJoinMethodIndex = 0;
+        int tempJoinIndex = 0; // keeps track of the join with minimum cost
+        int tempJoinMethodIndex = 0; // keeps track of the join type with minimum cost
         Operator left = null;
         Operator right = null;
 
@@ -121,7 +120,7 @@ public class GreedyOptimizer {
             System.out.println("===== Iteration " + (currJoinOp+1) + " =====");
             minCost = Integer.MAX_VALUE;
             for (int i = 0; i < joinList.size(); i++) {
-                if (joinSelected[i] == 1)
+                if (joinSelected[i] == 1) // ignores joins that are already selected
                     continue;
                 Condition con = (Condition) joinList.get(i);
                 String lefttab = con.getLhs().getTabName();
@@ -155,9 +154,13 @@ public class GreedyOptimizer {
             System.out.println("Iteration " + (currJoinOp+1) + " Minimum Cost: " + minCost);
 
             jn = modifyJoinOp(tempJoinIndex, tempJoinMethodIndex);
-            joinSelected[tempJoinIndex] = 1;
+            joinSelected[tempJoinIndex] = 1; // indicates that the join is selected
             currJoinOp++;
         }
+
+        /** The last join operation is the root for the
+         ** constructed till now
+         **/
 
         if (numJoin != 0) {
             root = jn;
@@ -177,6 +180,10 @@ public class GreedyOptimizer {
             root.setSchema(newSchema);
         }
     }
+
+    /**
+     * Creates a joinOp with the minimum cost
+     */
 
     private Join modifyJoinOp(int listIndex, int methodIndex) {
         Condition con = (Condition) joinList.get(listIndex);

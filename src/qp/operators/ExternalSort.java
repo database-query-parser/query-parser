@@ -161,7 +161,6 @@ public class ExternalSort extends Operator {
     private void executeMerge() {
         int numUsableBuff = numBuff - 1;
 
-        // Actually > 0 can... Leave it first
         while (sortedRunFiles.size() > 1) {
             int totalSortedRuns = sortedRunFiles.size();
             Vector<File> newSortedRuns = new Vector<>();
@@ -180,7 +179,9 @@ public class ExternalSort extends Operator {
 
             clearTempFiles(sortedRunFiles);
             sortedRunFiles = newSortedRuns;
-        } if (sortedRunFiles.size() == 1) {
+        }
+
+        if (isDistinct && sortedRunFiles.size() == 1) {
             int totalSortedRuns = 1;
             Vector<File> newSortedRuns = new Vector<>();
             for (int i = 0; i * numUsableBuff < totalSortedRuns; i++) {
@@ -239,6 +240,7 @@ public class ExternalSort extends Operator {
             int indexOfSmallest = 0;
             for (int i = 0; i < inputBuffers.size(); i++) {
                 Batch batch = inputBuffers.get(i);
+                // if all the tuples in the ith inputBuffers has been added to outputBuffer
                 if (batchTrackers[i] >= batch.size())
                     continue;
 
@@ -250,15 +252,14 @@ public class ExternalSort extends Operator {
             }
 
             if (smallest == null)
-                    break;
+                break;
 
             batchTrackers[indexOfSmallest]++; // increase batch index containing smallest
-            // if the batch from a run containing the smallest so far is completely read finish:
+            // if the batch from a run containing the smallest so far is completely read:
             if (batchTrackers[indexOfSmallest] == inputBuffers.get(indexOfSmallest).capacity()) {
-                // reload the next batch of the same run
                 Batch nextBatch = readBatch(inputStreams.get(indexOfSmallest));
                 if (nextBatch != null) {
-                    inputBuffers.set(indexOfSmallest, nextBatch);
+                    inputBuffers.set(indexOfSmallest, nextBatch); // replace the next batch to that buffer
                     batchTrackers[indexOfSmallest] = 0; // reset tracker to 0 for new batch
                 }
             }
@@ -267,9 +268,13 @@ public class ExternalSort extends Operator {
                 // If it is the same as the last item you added to your output list, throw it away
                 // otherwise, add it to your output list
                 if (lastTuple != null && comparator.compare(lastTuple, smallest) != 0) {
+                    // There is tuple already in output buffer
+                    // and the last tuple added is not the same as the current smallest tuple
                     outputBuffer.add(smallest);
                     lastTuple = smallest; // update the last tuple added into the output buffer
                 } else if (lastTuple == null) {
+                    // There is not tuple added in the output buffer yet
+                    // add the smallest tuple and update last tuple added
                     outputBuffer.add(smallest);
                     lastTuple = smallest;
                 } else if (comparator.compare(lastTuple, smallest) == 0) {
@@ -377,7 +382,8 @@ public class ExternalSort extends Operator {
         SortComparator(Schema schema) {
             this.schema = schema;
         }
-        //for distinct
+
+        // For DISTINCT
         SortComparator(Schema schema, Vector joinAttributes, boolean flag) {
             this.schema = schema;
             this.joinAttributes = joinAttributes;
