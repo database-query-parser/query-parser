@@ -91,6 +91,49 @@ In `next`, `ExternalSort` will pass the sorted table data in pages to the `Opera
 In `close`, `ExternalSort` will close the `table` and clear the single sorted run file data.
 
 === Sort-Merge Join
+The Sort-Merge Join algorithm is written in `SortMergeJoin` as an `Operator` object. The sort-merge join has two phases:
+
+. Sorting phase - the two tables are sorted using `ExternalSort`
+. Merging phase - merge the two tables based on the join attributes
+
+==== Sorting phase
+
+Two `ExternalSort` object has been created to sort both the left and right table.
+
+----
+leftSort = new ExternalSort(left, leftattr, numBuff, false);
+rightSort = new ExternalSort(right, rightattr, numBuff, false);
+----
+
+After the two tables were sorted, the data will be written to temporary files using the `writeSortedFiles` method, where a unique file name is assigned to each page that are written. The `File` object that points to the temporary files are added to a list of files and is returned from the method. These list of files are stored in `leftSortedFiles` and `rightSortedFiles` for both tables.
+
+==== Merging phase
+
+In the merging phase, one buffer `outbatch` is allocated for output, one buffer `rightbatch` for the right table, while the rest of the buffers `leftbatches` (or a block) are allocated for the left table. There are several pointer variables used to point to the correct position of the tuple:
+
+* `lcurs` - points to a left tuple in the current page
+* `rcurs` - points to a right tuple in the current page
+* `leftBatchIndex` - points to the current left page where the left tuple is located
+* `leftBlockIndex` - points to the current left block where the left page is located
+* `rightBatchIndex` - points to the current right page where the right tuple is located
+* `rightFirstMatchIndex` - points to very first right tuple that contains the same value. This is used to backtrack the `rightBatchIndex` pointer if the next left tuple reads in the same value again.
+* `rightFirstMatchBatchIndex` - points to the page containing the very first right tuple that contains the same value.
+
+The boolean variable `hasMatch` is set to `true` if the join results matched. This is used to handle the case where the left tuple has duplicate values.
+
+In the `next` method, a `while` loop is executed while the `outbatch` is not full. Inside this loop, the first segment of code loads the left buffers, while the next segment loads the right buffer. If either all the left or right pages has been read, the execution will call `close`. However, if the `hasMatch` remains true after all the right pages has been read, pointer will be set to the first right tuple that contains the same value using the `rightFirstMatchIndex`, and the page that contain thats tuple be will loaded to the right buffer using `rightFirstBatchIndex`. This is to handle the case where there may be another duplicate value in the next left tuple.
+
+The `while` loop reads each tuple from the left table and right table, and their join attributes are compared. There are three cases:
+
+. Left tuple is smaller - `lcurs` pointer will point to the next left tuple.
+.. If `hasMatch` is true, this means there is a duplicate value in the left tuple, and the right pointer will point back to the very first right tuple containing the value using `rightFirstMatchIndex` and `rightBatchIndex`.
+.. `hasMatch` will set to `false` regardless of whether `hasMatch` is initially true or false.
+. Left tuple is bigger - `rcurs` pointer will point to the next right tuple. `hasMatch` will be set to false.
+. Left tuple matches right tuple.
+.. If `hasMatch` is false, this means this is the first match that is encountered after some iterations. The pointer to the right tuple will be saved using `rightFirstMatchIndex` and `rightBatchIndex`. As explained in 1a, this is to keep track of the first right tuple containing the value which is necessary if there is a dulicate value in the left tuple.
+.. Regardless of whether `hasMatch` is true or false, a new tuple will be created by joining the two tuples and added to `outbatch`. `rcurs` pointer will point to the next right tuple.
+
+The `outbatch` will be returned. This process is repeated until one of the table has been fully read. `SortMergeJoin` will close by clearing the temporary files that were generated earlier.
 
 === Distinct
 
