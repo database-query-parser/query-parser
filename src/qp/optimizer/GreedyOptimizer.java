@@ -30,8 +30,6 @@ public class GreedyOptimizer {
     private Vector joinList;
     private Vector groupByList;
 
-    private Vector tempJoinList;
-
     private Hashtable tab_op_hash;
     private Operator root;
 
@@ -107,7 +105,6 @@ public class GreedyOptimizer {
         int minCost = Integer.MAX_VALUE;
         PlanCost pc;
         Join jn = null;
-        tempJoinList = (Vector) joinList.clone();
 
         int currJoinOp = 0;
         int tempJoinIndex = 0;
