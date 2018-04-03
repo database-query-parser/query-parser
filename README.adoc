@@ -105,7 +105,7 @@ leftSort = new ExternalSort(left, leftattr, numBuff, false);
 rightSort = new ExternalSort(right, rightattr, numBuff, false);
 ----
 
-After the two tables were sorted, the data will be written to temporary files using the `writeSortedFiles` method, where a unique file name is assigned to each page that are written. The `File` object that points to the temporary files are added to a list of files and is returned from the method. These list of files are stored in `leftSortedFiles` and `rightSortedFiles` for both tables.
+After the two tables were sorted, the data will be written to temporary files using the `writeSortedFiles` method, where a unique file name is assigned to each page that are written. The `File` object that points to the temporary files are added to a list of files and is returned from the method. These list of files are stored in `leftSortedFiles` and `rightSortedFiles` for each table.
 
 ==== Merging phase
 
