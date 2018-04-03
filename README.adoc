@@ -30,5 +30,35 @@ The following features are implemented:
 === Sort-Merge Join
 
 === Distinct
+The elimination of duplicated is implemented using a variant of optimized sort-based approach.
+Given a relation `R`, the attributes of `R` are passed to `ExternalSort`.
+Sorted runs are generated with the extracted attributes.
+During the merging phase, the duplicates are removed with the following algorithm:
+
+```
+lastTupleAdded;
+if (isDistinct) {
+    if (current smallest tuple != lastTupleAdded) {
+	    outputBuffer.add(current smallest tuple);
+	    lastTupleAdded = current smallest tuple;
+    } else {
+        // Duplicates detected, ignore
+    }
+} else {
+    outputBuffer.add(current smallest tuple);
+}
+```
+
+Comparison of the tuples are based on the extracted attributes.
+For example, given a relation `R(firstname, lastname, age, allowance)` and three tuples,
+with the extracted attributes `firstname`, `lastname` and `age`;
+
+```
+- Tuple A(John, Doe, 18, 500),
+- Tuple B(John, Toh, 18, 500) and
+- Tuple C(John, Doe, 18, 600)
+```
+
+Based on the three extracted attributes `A` is equal to `C`, `A` is not equal to `B` and `B` is not equal to `C`.
 
 === Greedy Optimizer
