@@ -133,7 +133,7 @@ The `while` loop reads each tuple from the left table and right table, and their
 .. If `hasMatch` is false, this means this is the first match that is encountered after some iterations. The pointer to the right tuple will be saved using `rightFirstMatchIndex` and `rightBatchIndex`. As explained in 1a, this is to keep track of the first right tuple containing the value which is necessary if there is a dulicate value in the left tuple.
 .. Regardless of whether `hasMatch` is true or false, a new tuple will be created by joining the two tuples and added to `outbatch`. `rcurs` pointer will point to the next right tuple.
 
-The `outbatch` will be returned. This process is repeated until one of the table has been fully read. `SortMergeJoin` will close by clearing the temporary files that were generated earlier.
+The `outbatch` will be returned. This process is repeated until one of the tables has been fully read. `SortMergeJoin` will close by clearing the temporary files that were generated earlier.
 
 === Distinct
 The elimination of duplicated is implemented using a variant of optimized sort-based approach.
