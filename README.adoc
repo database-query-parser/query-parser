@@ -24,6 +24,47 @@ This document provides information on the features that has been implemented int
 The following features are implemented:
 
 === Block-Nested Loop Join
+The Block-Nested-Loop Join makes use of the existing Nested-Loop Join algorithm.
+The main difference between the two join algorithm is how the left btaches are loaded each time based on number of buffers-2
+instead of a single tuple:
+----
+
+    private void loadLeftBatches() {
+        for(int m=0; m< (numBuff-2); m++) {
+            Batch batch = left.next(); // get next batch of data
+            if(batch != null) leftbatches.add(batch);
+        }
+    }
+----
+For each numBuff it will load one batch into leftBatches, this will be done for each run to load numBuff-2 batches of data.
+
+After loading the leftBatches, it will transfer the data into a tuple list, this list consist of the number of buffers - 2 many tuples and is used to iterate through the whole of right table:
+----
+        private void loadTuplesFromBatch() {
+            for(int m=0; m<leftbatches.size(); m++) {
+                Batch batch = leftbatches.get(m);
+                for(int n=0; n < batch.size(); n++) //for each of the batch read in the tuples
+                    leftTuples.add(batch.elementAt(n));
+            }
+        }
+----
+
+The list is then used to check against the whole of right table as shown in the code below, if it match it will be pushed to outbatch:
+
+----
+for(i=lcurs; i< leftTuples.size(); i++){
+   for(j=rcurs;j<rightbatch.size();j++){
+       Tuple lefttuple = leftTuples.get(i);
+       Tuple righttuple = rightbatch.elementAt(j);
+       if(lefttuple.checkJoin(righttuple,leftindex,rightindex)){
+           Tuple outtuple = lefttuple.joinWith(righttuple);
+           outbatch.add(outtuple);
+           if (outbatchFull(i, j, outbatch)) return outbatch;
+       }
+   }
+   rcurs =0;
+}
+----
 
 === External Sort
 The external sort algorithm is written in `ExternalSort` as an `Operator` object. The `table` holds the data, the `joinAttribute` is the `Attribute` that is used to sort the data in `table`. `numBuff` is the number of buffers and `flag` indicates whether to eliminate duplicates for distinct operation (see Section 2.4).

@@ -124,12 +124,7 @@ public class BlockNestedJoin extends Join{
     /** from input buffers selects the tuples satisfying join condition
      ** And returns a page of output tuples
      **/
-
-
     public Batch next(){
-        //System.out.print("NestedJoin:--------------------------in next----------------");
-        //Debug.PPrint(con);
-        //System.out.println();
         int i,j;
         if(eosl && leftbatches.isEmpty()){
             close();
@@ -168,7 +163,7 @@ public class BlockNestedJoin extends Join{
                         for(j=rcurs;j<rightbatch.size();j++){
                             Tuple lefttuple = leftTuples.get(i);
                             Tuple righttuple = rightbatch.elementAt(j);
-                            if(lefttuple.checkJoin(righttuple,leftindex,rightindex)){
+                            if(lefttuple.checkJoin(righttuple,leftindex,rightindex)){//compares to check if can join
                                 Tuple outtuple = lefttuple.joinWith(righttuple);
                                 outbatch.add(outtuple);
                                 if (outbatchFull(i, j, outbatch)) return outbatch;
@@ -229,7 +224,7 @@ public class BlockNestedJoin extends Join{
             }
         }
     }
-
+    //load {@code leftTuples} with tuples from {@code leftbatches}
     private void loadTuplesFromBatch() {
         for(int m=0; m<leftbatches.size(); m++) {
             Batch batch = leftbatches.get(m);
@@ -237,7 +232,7 @@ public class BlockNestedJoin extends Join{
                 leftTuples.add(batch.elementAt(n));
         }
     }
-
+    //load numBuff-2 number of tuples into {@code leftbatches} from left table
     private void loadLeftBatches() {
         for(int m=0; m< (numBuff-2); m++) {
             Batch batch = left.next(); // get next batch of data
