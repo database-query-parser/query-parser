@@ -18,7 +18,7 @@ Project Team Members:
 * Sim Kwan Tiong, Damien (A0155983N)
 
 == Introduction
-This document provides details on the features that has been implemented into the query processing engine.
+This document provides information on the features that has been implemented into the query processing engine.
 
 == Implementation
 The following features are implemented:
