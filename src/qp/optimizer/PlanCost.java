@@ -135,7 +135,7 @@ public class PlanCost{
 	int joinType = node.getJoinType();
 	/** number of buffers allotted to this join**/
 
-	int numbuff = BufferManager.getBuffersPerJoin();
+	int numbuff = BufferManager.getNumBuffer();
 	int blockSize = numbuff - 2;
 
 	int joincost;
