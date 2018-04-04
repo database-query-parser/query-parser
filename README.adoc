@@ -51,7 +51,8 @@ if (isDistinct) {
 
 Comparison of the tuples are based on the extracted attributes.
 The comparator is modified such that is the SQL query contains `DISTINCT`
-the comparator will take in the flag that indicate the SQL query contains `DISTINCT` and the join attributes.
+the comparator will take in the flag that indicate the SQL query contains `DISTINCT`
+and the extracted attributes that appear in the `DISTINCT` clause.
 Hence, when it compares the tuples it will compare the tuple based on the attributes.
 The modification of the override `compare()` method is as follows:
 
