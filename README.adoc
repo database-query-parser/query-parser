@@ -50,6 +50,30 @@ if (isDistinct) {
 ```
 
 Comparison of the tuples are based on the extracted attributes.
+The comparator is modified such that is the SQL query contains `DISTINCT`
+the comparator will take in the flag that indicate the SQL query contains `DISTINCT` and the join attributes.
+Hence, when it compares the tuples it will compare the tuple based on the attributes.
+The modification of the override `compare()` method is as follows:
+
+```
+if (isDistinct) {
+    boolean hasSameAttr = false;
+    int finalComparisonResult = 0;
+    Vector attList = joinAttributes;
+    for (int i = 0; i < attList.size(); i++) {
+        int index = schema.indexOf((Attribute) attList.get(i));
+        int result = Tuple.compareTuples(t1, t2, index);
+        finalComparisonResult = result;
+
+        if (result != 0) {
+            hasSameAttr = false;
+            break;
+        }
+    }
+    return hasSameAttr ? 0 : finalComparisonResult;
+}
+```
+
 For example, given a relation `R(firstname, lastname, age, allowance)` and three tuples,
 with the extracted attributes `firstname`, `lastname` and `age`;
 
