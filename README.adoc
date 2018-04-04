@@ -58,7 +58,7 @@ The modification of the override `compare()` method is as follows:
 
 ```
 if (isDistinct) {
-    boolean hasSameAttr = false;
+    boolean hasSameAttr = true;
     int finalComparisonResult = 0;
     Vector attList = joinAttributes;
     for (int i = 0; i < attList.size(); i++) {
