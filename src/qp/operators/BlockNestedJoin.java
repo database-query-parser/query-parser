@@ -102,7 +102,7 @@ public class BlockNestedJoin extends Join{
             //if(right.getOpType() != OpType.SCAN){
             int id = filenum;
             filenum++;
-            rfname = "NJtemp-" + String.valueOf(filenum);
+            rfname = "BNJtemp-" + String.valueOf(filenum);
             try{
                 ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(rfname));
                 while( (rightpage = right.next()) != null){
@@ -124,12 +124,7 @@ public class BlockNestedJoin extends Join{
     /** from input buffers selects the tuples satisfying join condition
      ** And returns a page of output tuples
      **/
-
-
     public Batch next(){
-        //System.out.print("NestedJoin:--------------------------in next----------------");
-        //Debug.PPrint(con);
-        //System.out.println();
         int i,j;
         if(eosl && leftbatches.isEmpty()){
             close();
@@ -143,13 +138,13 @@ public class BlockNestedJoin extends Join{
                 //Load all the leftbatches
                 /** new left page is to be fetched**/
                 //Clear any existing data
-                this.leftbatches.clear();
-                this.leftTuples.clear();
+                this.leftbatches.clear(); //clear to take in next batch of data
+                this.leftTuples.clear(); //clear to take in next batch of data
                 //load leftbatches with data
                 loadLeftBatches();
                 //Load data from batch to leftTuples
                 loadTuplesFromBatch();
-                //if batch is empty reinitialise right materialized stream
+                //if left table is not yet empty reinitialise right materialized stream
                 reinitialiseRightMaterializedStream();
                 if(leftbatches.size()==0){
                     eosl=true;
@@ -163,35 +158,32 @@ public class BlockNestedJoin extends Join{
                     if(rcurs==0 && lcurs==0){
                         rightbatch = (Batch) in.readObject();
                     }
-
+                    //Each run compares numBuff-2 number of tuples with all of right table tuples
                     for(i=lcurs; i< leftTuples.size(); i++){
                         for(j=rcurs;j<rightbatch.size();j++){
                             Tuple lefttuple = leftTuples.get(i);
                             Tuple righttuple = rightbatch.elementAt(j);
-                            if(lefttuple.checkJoin(righttuple,leftindex,rightindex)){
+                            if(lefttuple.checkJoin(righttuple,leftindex,rightindex)){//compares to check if can join
                                 Tuple outtuple = lefttuple.joinWith(righttuple);
-
-                                //Debug.PPrint(outtuple);
-                                //System.out.println();
                                 outbatch.add(outtuple);
                                 if (outbatchFull(i, j, outbatch)) return outbatch;
                             }
                         }
-                        rcurs =0;
+                        rcurs =0;//reset to start of right table
                     }
-                    lcurs=0;
+                    lcurs=0;//reset for the next batch of left table tuples (buffers-2)
                 }catch(EOFException e){
                     try{
                         in.close();
                     }catch (IOException io){
-                        System.out.println("NestedJoin:Error in temporary file reading");
+                        System.out.println("BlockNestedJoin:Error in temporary file reading");
                     }
                     eosr=true;
                 }catch(ClassNotFoundException c){
-                    System.out.println("NestedJoin:Some error in deserialization ");
+                    System.out.println("BlockNestedJoin:Some error in deserialization ");
                     exit(1);
                 }catch(IOException io){
-                    System.out.println("NestedJoin:temporary file reading error");
+                    System.out.println("BlockNestedJoin:temporary file reading error");
                     exit(1);
                 }
             }
@@ -232,15 +224,15 @@ public class BlockNestedJoin extends Join{
             }
         }
     }
-
+    //load {@code leftTuples} with tuples from {@code leftbatches}
     private void loadTuplesFromBatch() {
         for(int m=0; m<leftbatches.size(); m++) {
             Batch batch = leftbatches.get(m);
-            for(int n=0; n< batch.size(); n++)
+            for(int n=0; n < batch.size(); n++) //for each of the batch read in the tuples
                 leftTuples.add(batch.elementAt(n));
         }
     }
-
+    //load numBuff-2 number of tuples into {@code leftbatches} from left table
     private void loadLeftBatches() {
         for(int m=0; m< (numBuff-2); m++) {
             Batch batch = left.next(); // get next batch of data
