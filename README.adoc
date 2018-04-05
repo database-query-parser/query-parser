@@ -37,13 +37,13 @@ private void loadLeftBatches() {
 After loading the left pages, the tuples will be extracted from the pages and added to `leftTuples` list.
 
 ----
-        private void loadTuplesFromBatch() {
-            for(int m=0; m<leftbatches.size(); m++) {
-                Batch batch = leftbatches.get(m);
-                for(int n=0; n < batch.size(); n++) //for each of the batch read in the tuples
-                    leftTuples.add(batch.elementAt(n));
-            }
-        }
+private void loadTuplesFromBatch() {
+    for(int m=0; m<leftbatches.size(); m++) {
+        Batch batch = leftbatches.get(m);
+        for(int n=0; n < batch.size(); n++) //for each of the batch read in the tuples
+            leftTuples.add(batch.elementAt(n));
+    }
+}
 ----
 
 This list is used to compare the tuples against the right tuple to perform the join. If there is a match, the tuples will be joined together and added to `outbatch`. When the `outbatch` is full, it will be returned.
