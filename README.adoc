@@ -24,21 +24,18 @@ This document provides information on the features that has been implemented int
 The following features are implemented:
 
 === Block-Nested Loop Join
-The Block-Nested-Loop Join makes use of the existing Nested-Loop Join algorithm.
-The main difference between the two join algorithm is how the left btaches are loaded each time based on number of buffers-2
-instead of a single tuple:
+The Block-Nested-Loop Join is similar to the existing Nested-Loop Join algorithm. The main difference between these two algorithm is how the left pages are loaded. The Block-Nested-Loop Join uses `numBuff - 2` number of buffers, where `numBuff` is the total number of buffers available, to load the left pages instead of just using a single buffer. The following method `loadLeftBatches` loads in the left pages:
 ----
-
-    private void loadLeftBatches() {
-        for(int m=0; m< (numBuff-2); m++) {
-            Batch batch = left.next(); // get next batch of data
-            if(batch != null) leftbatches.add(batch);
-        }
+private void loadLeftBatches() {
+    for(int m=0; m< (numBuff-2); m++) {
+        Batch batch = left.next(); // get next batch of data
+	if(batch != null) leftbatches.add(batch);
     }
+}
 ----
-For each numBuff it will load one batch into leftBatches, this will be done for each run to load numBuff-2 batches of data.
 
-After loading the leftBatches, it will transfer the data into a tuple list, this list consist of the number of buffers - 2 many tuples and is used to iterate through the whole of right table:
+After loading the left pages, the tuples will be extracted from the pages and added to `leftTuples` list.
+
 ----
         private void loadTuplesFromBatch() {
             for(int m=0; m<leftbatches.size(); m++) {
@@ -49,7 +46,7 @@ After loading the leftBatches, it will transfer the data into a tuple list, this
         }
 ----
 
-The list is then used to check against the whole of right table as shown in the code below, if it match it will be pushed to outbatch:
+This list is used to compare the tuples against the right tuple to perform the join. If there is a match, the tuples will be joined together and added to `outbatch`. When the `outbatch` is full, it will be returned.
 
 ----
 for(i=lcurs; i< leftTuples.size(); i++){
