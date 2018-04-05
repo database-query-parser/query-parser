@@ -102,7 +102,7 @@ public class BlockNestedJoin extends Join{
             //if(right.getOpType() != OpType.SCAN){
             int id = filenum;
             filenum++;
-            rfname = "NJtemp-" + String.valueOf(filenum);
+            rfname = "BNJtemp-" + String.valueOf(filenum);
             try{
                 ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(rfname));
                 while( (rightpage = right.next()) != null){
