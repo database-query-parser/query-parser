@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge"><![endif]-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Asciidoctor 1.5.4">
+  <title>CS3223 Project</title>
+  <link rel="stylesheet" href="https://asciidoclive.com/assets/asciidoctor.js/css/asciidoctor.css">
+</head>
+
+<body class="article">
+  <div id="header">
+    <h1>CS3223 Project</h1>
+  </div>
+  <div id="content">
+    <div id="preamble">
+      <div class="sectionbody">
+        <div class="paragraph">
+          <p>Project Team Members:</p>
+        </div>
+        <div class="ulist">
+          <ul>
+            <li>
+              <p>Chua Wei Wen (A0156034M)</p>
+            </li>
+            <li>
+              <p>Khor Shao Liang (A0160529E)</p>
+            </li>
+            <li>
+              <p>Sim Kwan Tiong, Damien (A0155983N)</p>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div id="toc" class="toc">
+        <div id="toctitle"></div>
+        <ul class="sectlevel1">
+          <li><a href="#_introduction">1. Introduction</a></li>
+          <li><a href="#_implementation">2. Implementation</a>
+            <ul class="sectlevel2">
+              <li><a href="#_block_nested_loop_join">2.1. Block-Nested Loop Join</a></li>
+              <li><a href="#_external_sort">2.2. External Sort</a></li>
+              <li><a href="#_sort_merge_join">2.3. Sort-Merge Join</a></li>
+              <li><a href="#_distinct">2.4. Distinct</a></li>
+              <li><a href="#_greedy_optimizer">2.5. Greedy Optimizer</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <div class="sect1">
+      <h2 id="_introduction">1. Introduction</h2>
+      <div class="sectionbody">
+        <div class="paragraph">
+          <p>This document provides information on the features that has been implemented
+            into the query processing engine.</p>
+        </div>
+      </div>
+    </div>
+    <div class="sect1">
+      <h2 id="_implementation">2. Implementation</h2>
+      <div class="sectionbody">
+        <div class="paragraph">
+          <p>The following features are implemented:</p>
+        </div>
+        <div class="sect2">
+          <h3 id="_block_nested_loop_join">2.1. Block-Nested Loop Join</h3>
+          <div class="paragraph">
+            <p>The Block-Nested-Loop Join is similar to the existing Nested-Loop Join
+              algorithm. The main difference between these two algorithm is how the
+              left pages are loaded. The Block-Nested-Loop Join uses <code>numBuff - 2</code>              number of buffers, where <code>numBuff</code> is the total number of
+              buffers available, to load the left pages instead of just using a single
+              buffer. The following method <code>loadLeftBatches</code> loads in
+              the left pages:</p>
+          </div>
+          <div class="listingblock">
+            <div class="content">
+              <pre>private void loadLeftBatches() {
+    for(int m=0; m&lt; (numBuff-2); m++) {
+        Batch batch = left.next(); // get next batch of data
+	if(batch != null) leftbatches.add(batch);
+    }
+}</pre>
+            </div>
+          </div>
+          <div class="paragraph">
+            <p>After loading the left pages, the tuples will be extracted from the pages
+              and added to <code>leftTuples</code> list.</p>
+          </div>
+          <div class="listingblock">
+            <div class="content">
+              <pre>private void loadTuplesFromBatch() {
+    for(int m=0; m&lt;leftbatches.size(); m++) {
+        Batch batch = leftbatches.get(m);
+        for(int n=0; n &lt; batch.size(); n++) //for each of the batch read in the tuples
+            leftTuples.add(batch.elementAt(n));
+    }
+}</pre>
+            </div>
+          </div>
+          <div class="paragraph">
+            <p>This list is used to compare the tuples against the right tuple to perform
+              the join. If there is a match, the tuples will be joined together and
+              added to <code>outbatch</code>. When the <code>outbatch</code> is full,
+              it will be returned.</p>
+          </div>
+          <div class="listingblock">
+            <div class="content">
+              <pre>for(i=lcurs; i&lt; leftTuples.size(); i++){
+   for(j=rcurs;j&lt;rightbatch.size();j++){
+       Tuple lefttuple = leftTuples.get(i);
+       Tuple righttuple = rightbatch.elementAt(j);
+       if(lefttuple.checkJoin(righttuple,leftindex,rightindex)){
+           Tuple outtuple = lefttuple.joinWith(righttuple);
+           outbatch.add(outtuple);
+           if (outbatchFull(i, j, outbatch)) return outbatch;
+       }
+   }
+   rcurs =0;
+}</pre>
+            </div>
+          </div>
+        </div>
+        <div class="sect2">
+          <h3 id="_external_sort">2.2. External Sort</h3>
+          <div class="paragraph">
+            <p>The external sort algorithm is written in <code>ExternalSort</code> as
+              an <code>Operator</code> object. The <code>table</code> holds the data,
+              the <code>joinAttribute</code> is the <code>Attribute</code> that is
+              used to sort the data in <code>table</code>. <code>numBuff</code> is
+              the number of buffers and <code>flag</code> indicates whether to eliminate
+              duplicates for distinct operation (see Section 2.4).</p>
+          </div>
+          <div class="listingblock">
+            <div class="content">
+              <pre>public ExternalSort(Operator table, Attribute joinAttribute, int numBuff, boolean flag) {
+    super(OpType.SORT);
+    this.table = table;
+    this.numBuff = numBuff;
+    this.batchSize = Batch.getPageSize()/table.getSchema().getTupleSize();
+    this.joinAttribute = joinAttribute;
+    this.fileNum = instanceNum++;
+    this.isDistinct = flag;
+}</pre>
+            </div>
+          </div>
+          <div class="paragraph">
+            <p>Since external sort is required to generate temporary files to store
+              intermediate results, a unique variable is assigned to each instance
+              of <code>ExternalSort</code> created. This is achieved by creating
+              a static variable <code>instanceNum</code>, which is assigned to <code>fileNum</code>              in the constructor as the unique number. The <code>instanceNum</code>              is incremented which will be used as the next unique number when another
+              <code>ExternalSort</code> object is created.</p>
+          </div>
+          <div class="paragraph">
+            <p>The name of the temporary files will contain the integers <code>fileNum</code>,
+              <code>passNum</code> and <code>runNum</code> to differentiate the files.</p>
+          </div>
+          <div class="paragraph">
+            <p>The external sort is done in the <code>open</code> method. There are
+              two phases in external sort:</p>
+          </div>
+          <div class="olist arabic">
+            <ol class="arabic">
+              <li>
+                <p>Generate sorted runs - implemented in the method <code>generateRuns</code>.</p>
+              </li>
+              <li>
+                <p>Merge the sorted runs - implemented in the method <code>executeMerge</code>.</p>
+              </li>
+            </ol>
+          </div>
+          <div class="paragraph">
+            <p>A <code>Vector</code> object <code>sortedRunFiles</code> holds the file
+              pointer to the files that are generated during the first phase.</p>
+          </div>
+          <div class="sect3">
+            <h4 id="_generate_sorted_runs">2.2.1. Generate Sorted Runs</h4>
+            <div class="paragraph">
+              <p>In the <code>generateRuns</code> method, a <code>Vector</code> object
+                <code>batchList</code> that holds <code>Batch</code> object simulates
+                the buffers that are available to hold the pages. Pages are added
+                into the <code>batchList</code> until it is "full", in which the
+                <code>batchList</code> will be passed to another method <code>generateSortedRun</code>.</p>
+            </div>
+            <div class="paragraph">
+              <p>In <code>generateSortedRun</code>, all the tuples are loaded from the
+                pages and stored in a temporary <code>Vector</code> object <code>tupleList</code>.
+                The <code>tupleList</code> is sorted using <code>SortComparator</code>                which sorts the list based on the join attribute. After the list
+                is sorted, the tuples will be added to the pages. If the page is
+                full, the page <code>currentBatch</code> will be added to <code>sortedRun</code>.
+                Pages will be added to <code>sortedRun</code> until it is full, in
+                which it returns the completed sorted run.</p>
+            </div>
+            <div class="paragraph">
+              <p>The <code>sortedRun</code> will be passed to <code>writeRun</code>                method, which writes to a temporary file to simulate writing of data
+                to disk with a unique file name. The <code>File</code> object that
+                holds the file pointer to the generated temporary files will be returned,
+                and it will be stored in the <code>Vector</code> object <code>sortedRunFiles</code>.
+                This allows easier access to the files during the second phase.</p>
+            </div>
+            <div class="paragraph">
+              <p>The <code>generateRuns</code> will run until all the tuples have been
+                read, and all the sorted runs are generated.</p>
+            </div>
+          </div>
+          <div class="sect3">
+            <h4 id="_merge_sorted_runs">2.2.2. Merge Sorted Runs</h4>
+            <div class="paragraph">
+              <p>The second phase is executed in the <code>executeMerge</code> method.
+                The number of buffers available <code>numUsableBuff</code> simulates
+                the merging phase, in which one buffer is used for output, while
+                the rest of the buffers are used for merging.</p>
+            </div>
+            <div class="paragraph">
+              <p>The while loop keeps executing until all the runs have been merged
+                into a single sorted run. A <code>Vector</code> object <code>newSortedRuns</code>                keeps track of the new files containing the new sorted runs that
+                are merged. The <code>startIndex</code> and <code>endIndex</code>                essentially picks the indexes of the file pointers stored in <code>sortedRunFiles</code>                that can be placed into the available buffer space <code>numUsableBuff</code>.
+                These files are picked and stored in a <code>List</code> object <code>runsToSort</code>.
+                This list is passed to another method <code>mergeSortedRuns</code>.</p>
+            </div>
+            <div class="paragraph">
+              <p>In the <code>mergeSortedRuns</code>, <code>inputBuffers</code> holds
+                the content of the pages that will be loaded from the file. The <code>inputStreams</code>                is a list of <code>ObjectInputStream</code> object that reads in
+                the respective <code>File</code> object from the <code>sortedRuns</code>.
+                The <code>for</code> loop below reads in each page that are stored
+                in the <code>File</code> and place it into the <code>inputBuffers</code>.</p>
+            </div>
+            <div class="listingblock">
+              <div class="content">
+                <pre>for (ObjectInputStream ois : inputStreams) {
+    Batch batch = readBatch(ois);
+        inputBuffers.add(batch);
+}</pre>
+              </div>
+            </div>
+            <div class="paragraph">
+              <p>The <code>int[]</code> array <code>batchTrackers</code> keeps track
+                of the number of tuples that has been added to the <code>outputBuffer</code>                for each <code>inputBuffers</code>. The <code>Tuple</code> object
+                <code>smallest</code> keeps track of the smallest tuple encountered
+                so far in the next <code>for</code> loop, and the <code>indexOfSmallest</code>                keeps track of the page index of the tuple.</p>
+            </div>
+            <div class="paragraph">
+              <p>After the smallest tuple has been found, the <code>backTrackers</code>                for the index of the <code>inputBuffers</code> where the smallest
+                tuple is found will be incremented. This indicates that one additional
+                tuple will be added to the <code>outputBuffer</code> and will then
+                point to the next tuple in that buffer. If all the tuples in that
+                <code>inputBuffer</code> has been added to the <code>outputBuffer</code>,
+                that input buffer will be replaced with a new page, and the <code>batchTrackers</code>                will be reset to 0 to point to the first tuple.</p>
+            </div>
+            <div class="paragraph">
+              <p>Next it will check whether <code>isDistinct</code> is true. This will
+                be described in Section 2.4. Otherwise, the tuple will be added to
+                the <code>outputBuffer</code>.</p>
+            </div>
+            <div class="paragraph">
+              <p>When the <code>outputBuffer</code> is full, it will be written to a
+                temporary file. The whole process is repeated until a sorted run
+                is generated and a <code>File</code> object holding the pointer to
+                the file will be returned. This file will be added to <code>newSortedRuns</code>                that contains the newly merged sorted runs. This process is repeated
+                until the sorted runs are merged. The old <code>sortedRunFiles</code>                will be deleted by the <code>clearTempFiles</code> method, and the
+                <code>sortedRunFiles</code> will point to the <code>newSortedRuns</code>.</p>
+            </div>
+            <div class="paragraph">
+              <p>The whole process repeats until there is only one sorted run left.</p>
+            </div>
+          </div>
+          <div class="sect3">
+            <h4 id="_passing_of_data">2.2.3. Passing of data</h4>
+            <div class="paragraph">
+              <p>In <code>next</code>, <code>ExternalSort</code> will pass the sorted
+                table data in pages to the <code>Operator</code> object that calls
+                <code>ExternalSort</code>.</p>
+            </div>
+          </div>
+          <div class="sect3">
+            <h4 id="_closing">2.2.4. Closing</h4>
+            <div class="paragraph">
+              <p>In <code>close</code>, <code>ExternalSort</code> will close the <code>table</code>                and clear the single sorted run file data.</p>
+            </div>
+          </div>
+        </div>
+        <div class="sect2">
+          <h3 id="_sort_merge_join">2.3. Sort-Merge Join</h3>
+          <div class="paragraph">
+            <p>The Sort-Merge Join algorithm is written in <code>SortMergeJoin</code>              as an <code>Operator</code> object. The sort-merge join has two phases:</p>
+          </div>
+          <div class="olist arabic">
+            <ol class="arabic">
+              <li>
+                <p>Sorting phase - the two tables are sorted using <code>ExternalSort</code></p>
+              </li>
+              <li>
+                <p>Merging phase - merge the two tables based on the join attributes</p>
+              </li>
+            </ol>
+          </div>
+          <div class="sect3">
+            <h4 id="_sorting_phase">2.3.1. Sorting phase</h4>
+            <div class="paragraph">
+              <p>Two <code>ExternalSort</code> objects are created to sort both the
+                left and right table.</p>
+            </div>
+            <div class="listingblock">
+              <div class="content">
+                <pre>leftSort = new ExternalSort(left, leftattr, numBuff, false);
+rightSort = new ExternalSort(right, rightattr, numBuff, false);</pre>
+              </div>
+            </div>
+            <div class="paragraph">
+              <p>After the two tables were sorted, the data will be written to temporary
+                files using the <code>writeSortedFiles</code> method, where a unique
+                file name is assigned to each page that are written. The <code>File</code>                object that points to the temporary files are added to a list of
+                files and is returned from the method. These list of files are stored
+                in <code>leftSortedFiles</code> and <code>rightSortedFiles</code>                for each table.</p>
+            </div>
+          </div>
+          <div class="sect3">
+            <h4 id="_merging_phase">2.3.2. Merging phase</h4>
+            <div class="paragraph">
+              <p>In the merging phase, one buffer <code>outbatch</code> is allocated
+                for output, one buffer <code>rightbatch</code> for the right table,
+                while the rest of the buffers <code>leftbatches</code> (or a block)
+                are allocated for the left table. There are several pointer variables
+                used to point to the correct position of the tuple:</p>
+            </div>
+            <div class="ulist">
+              <ul>
+                <li>
+                  <p><code>lcurs</code> - points to a left tuple in the current page</p>
+                </li>
+                <li>
+                  <p><code>rcurs</code> - points to a right tuple in the current page</p>
+                </li>
+                <li>
+                  <p><code>leftBatchIndex</code> - points to the current left page where
+                    the left tuple is located</p>
+                </li>
+                <li>
+                  <p><code>leftBlockIndex</code> - points to the current left block
+                    where the left page is located</p>
+                </li>
+                <li>
+                  <p><code>rightBatchIndex</code> - points to the current right page
+                    where the right tuple is located</p>
+                </li>
+                <li>
+                  <p><code>rightFirstMatchIndex</code> - points to very first right
+                    tuple that contains the same value. This is used to backtrack
+                    the <code>rightBatchIndex</code> pointer if the next left tuple
+                    reads in the same value again.</p>
+                </li>
+                <li>
+                  <p><code>rightFirstMatchBatchIndex</code> - points to the page containing
+                    the very first right tuple that contains the same value.</p>
+                </li>
+              </ul>
+            </div>
+            <div class="paragraph">
+              <p>The boolean variable <code>hasMatch</code> is set to <code>true</code>                if the join results matched. This is used to handle the case where
+                the left tuple has duplicate values.</p>
+            </div>
+            <div class="paragraph">
+              <p>In the <code>next</code> method, a <code>while</code> loop is executed
+                while the <code>outbatch</code> is not full. Inside this loop, the
+                first segment of code loads the left buffers, while the next segment
+                loads the right buffer. If either all the left or right pages has
+                been read, the execution will call <code>close</code>. However, if
+                the <code>hasMatch</code> remains true after all the right pages
+                has been read, pointer will be set to the first right tuple that
+                contains the same value using the <code>rightFirstMatchIndex</code>,
+                and the page that contain thats tuple be will loaded to the right
+                buffer using <code>rightFirstBatchIndex</code>. This is to handle
+                the case where there may be another duplicate value in the next left
+                tuple.</p>
+            </div>
+            <div class="paragraph">
+              <p>The <code>while</code> loop reads each tuple from the left table and
+                right table, and their join attributes are compared. There are three
+                cases:</p>
+            </div>
+            <div class="olist arabic">
+              <ol class="arabic">
+                <li>
+                  <p>Left tuple is smaller - <code>lcurs</code> pointer will point to
+                    the next left tuple.</p>
+                  <div class="olist loweralpha">
+                    <ol class="loweralpha" type="a">
+                      <li>
+                        <p>If <code>hasMatch</code> is true, this means there is a duplicate
+                          value in the left tuple, and the right pointer will point
+                          back to the very first right tuple containing the value
+                          using <code>rightFirstMatchIndex</code> and <code>rightBatchIndex</code>.</p>
+                      </li>
+                      <li>
+                        <p><code>hasMatch</code> will set to <code>false</code> regardless
+                          of whether <code>hasMatch</code> is initially true or false.</p>
+                      </li>
+                    </ol>
+                  </div>
+                </li>
+                <li>
+                  <p>Left tuple is bigger - <code>rcurs</code> pointer will point to
+                    the next right tuple. <code>hasMatch</code> will be set to false.</p>
+                </li>
+                <li>
+                  <p>Left tuple matches right tuple.</p>
+                  <div class="olist loweralpha">
+                    <ol class="loweralpha" type="a">
+                      <li>
+                        <p>If <code>hasMatch</code> is false, this means this is the
+                          first match that is encountered after some iterations.
+                          The pointer to the right tuple will be saved using <code>rightFirstMatchIndex</code>                          and <code>rightBatchIndex</code>. As explained in 1a, this
+                          is to keep track of the first right tuple containing the
+                          value which is necessary if there is a dulicate value in
+                          the left tuple.</p>
+                      </li>
+                      <li>
+                        <p>Regardless of whether <code>hasMatch</code> is true or false,
+                          a new tuple will be created by joining the two tuples and
+                          added to <code>outbatch</code>. <code>rcurs</code> pointer
+                          will point to the next right tuple.</p>
+                      </li>
+                    </ol>
+                  </div>
+                </li>
+              </ol>
+            </div>
+            <div class="paragraph">
+              <p>The <code>outbatch</code> will be returned. This process is repeated
+                until one of the tables has been fully read. In the <code>close</code>                method, <code>SortMergeJoin</code> will clear all the temporary files
+                that were generated earlier.</p>
+            </div>
+          </div>
+        </div>
+        <div class="sect2">
+          <h3 id="_distinct">2.4. Distinct</h3>
+          <div class="paragraph">
+            <p>The elimination of duplicated is implemented using a variant of optimized
+              sort-based approach. Given a relation <code>R</code>, the attributes
+              of <code>R</code> are passed to <code>ExternalSort</code>. Sorted runs
+              are generated with the extracted attributes. During the merging phase,
+              the duplicates are removed with the following algorithm:</p>
+          </div>
+          <div class="listingblock">
+            <div class="content">
+              <pre class="highlight"><code>lastTupleAdded;
+if (isDistinct) {
+    if (current smallest tuple != lastTupleAdded) {
+	    outputBuffer.add(current smallest tuple);
+	    lastTupleAdded = current smallest tuple;
+    } else {
+        // Duplicates detected, ignore
+    }
+} else {
+    outputBuffer.add(current smallest tuple);
+}</code></pre>
+            </div>
+          </div>
+          <div class="paragraph">
+            <p>Comparison of the tuples are based on the extracted attributes. The comparator
+              is modified such that if the SQL query contains <code>DISTINCT</code>              the comparator will take in the flag and the extracted attributes that
+              appear in the <code>DISTINCT</code> clause. Hence, when it compares
+              the tuples it will compare the tuple based on the attributes. The modification
+              of the override <code>compare()</code> method is as follows:</p>
+          </div>
+          <div class="listingblock">
+            <div class="content">
+              <pre class="highlight"><code>if (isDistinct) {
+    boolean hasSameAttr = true;
+    int finalComparisonResult = 0;
+    Vector attList = joinAttributes;
+    for (int i = 0; i &lt; attList.size(); i++) {
+        int index = schema.indexOf((Attribute) attList.get(i));
+        int result = Tuple.compareTuples(t1, t2, index);
+        finalComparisonResult = result;
+
+        if (result != 0) {
+            hasSameAttr = false;
+            break;
+        }
+    }
+    return hasSameAttr ? 0 : finalComparisonResult;
+}</code></pre>
+            </div>
+          </div>
+          <div class="paragraph">
+            <p>For example, given a relation <code>R(firstname, lastname, age, allowance)</code>              and three tuples, with the extracted attributes <code>firstname</code>,
+              <code>lastname</code> and <code>age</code>;</p>
+          </div>
+          <div class="listingblock">
+            <div class="content">
+              <pre class="highlight"><code>- Tuple A(John, Doe, 18, 500),
+- Tuple B(John, Toh, 18, 500) and
+- Tuple C(John, Doe, 18, 600)</code></pre>
+            </div>
+          </div>
+          <div class="paragraph">
+            <p>Based on the three extracted attributes <code>A</code> is equal to <code>C</code>,
+              <code>A</code> is not equal to <code>B</code> and <code>B</code> is
+              not equal to <code>C</code>.</p>
+          </div>
+        </div>
+        <div class="sect2">
+          <h3 id="_greedy_optimizer">2.5. Greedy Optimizer</h3>
+          <div class="paragraph">
+            <p>The optimizer <code>GreedyOptimizer</code> uses the greedy heuristics
+              to determine the plan to be executed. The optimizer first prepares
+              the plan through the <code>preparePlan</code> method. In the method,
+              the code is similar to the <code>prepareInitialPlan</code> method in
+              <code>RandomInitialPlan</code>, but the major difference lies in the
+              <code>createJoinOp</code> method.</p>
+          </div>
+          <div class="paragraph">
+            <p>The <code>joinSelected</code> array keeps track of the joins that are
+              chosen by the optimizer. The first loop of the method runs through
+              each join in the <code>joinList</code> that is generated from the <code>SQLQuery</code>              object. The current join that has already been selected by the optimizer
+              will be ignored. The <code>Join</code> operator will be created for
+              each join, and then it will enter another <code>for</code> loop that
+              sets the join type and calculates the plan cost of all the different
+              join types of that <code>Join</code>. These two loops will execute
+              and updates the <code>minCost</code> and keeps track of the join index,
+              <code>tempJoinIndex</code> and join type index, <code>tempJoinMethodIndex</code>              that computes the <code>minCost</code>. Essentially, the algorithm
+              selects the join and join method with the lowest cost.</p>
+          </div>
+          <div class="paragraph">
+            <p>At the end of the two loops, <code>tempJoinIndex</code> and <code>tempJoinMethodIndex</code>              will be passed to <code>modifyJoinOp</code> method where it creates
+              a <code>Join</code> object with the minimum cost in the current iteration.
+              The hashtable <code>tab_op_hash</code> is modified to reflect the changes.
+              <code>joinSelected[tempJoinIndex]</code> is set to 1 so that in the
+              next iteration, this index in the <code>joinList</code> will be ignored.</p>
+          </div>
+          <div class="paragraph">
+            <p>This process is repeated until all the <code>Condition</code> object
+              in <code>joinList</code> has been selected. The <code>root</code> will
+              be set to the final <code>Join</code> operator.</p>
+          </div>
+          <div class="paragraph">
+            <p>After the plan has been generated, the optimizer returns the plan to
+              <code>QueryMain</code>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

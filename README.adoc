@@ -237,3 +237,5 @@ The `joinSelected` array keeps track of the joins that are chosen by the optimiz
 At the end of the two loops, `tempJoinIndex` and `tempJoinMethodIndex` will be passed to `modifyJoinOp` method where it creates a `Join` object with the minimum cost in the current iteration. The hashtable `tab_op_hash` is modified to reflect the changes. `joinSelected[tempJoinIndex]` is set to 1 so that in the next iteration, this index in the `joinList` will be ignored.
 
 This process is repeated until all the `Condition` object in `joinList` has been selected. The `root` will be set to the final `Join` operator.
+
+After the plan has been generated, the optimizer returns the plan to `QueryMain`.
