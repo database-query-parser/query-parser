@@ -156,6 +156,8 @@ public class QueryMain{
 /** Print final Plan **/
 	System.out.println("----------------------Execution Plan----------------");
 	Debug.PPrint(root);
+	PlanCost pc = new PlanCost();
+	System.out.println("\nFinal Cost: " + pc.getCost(root));
 	System.out.println();
 
 

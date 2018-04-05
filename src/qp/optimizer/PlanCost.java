@@ -71,7 +71,8 @@ public class PlanCost{
 	    return getStatistics((Project)node);
 	}else if(node.getOpType() == OpType.SCAN){
 	    return getStatistics((Scan)node);
-
+	}else if(node.getOpType() == OpType.SORT){
+		return getStatistics((ExternalSort)node);
 	}
 	return -1;
     }
@@ -310,6 +311,19 @@ public class PlanCost{
 	//System.out.println("Scan: tablename="+tablename+"pres cost="+numpages+"total cost="+cost);
 	return numtuples;
     }
+
+	/** calculates the statistics, and cost of external sort operation **/
+
+	protected int getStatistics(ExternalSort node){
+		int numbuff = BufferManager.getBuffersPerJoin();
+		int tuplesize = node.getSchema().getTupleSize();
+		int outcapacity = Batch.getPageSize()/tuplesize;
+		int outtuples = calculateCost(node.getTable());
+		int outpages = (int) Math.ceil((double) outtuples / outcapacity);
+
+		cost = cost + externalSortCost(outpages, numbuff);
+		return outtuples;
+	}
 
 }
 
